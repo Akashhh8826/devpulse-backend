@@ -12,8 +12,7 @@
 - **Live Production API Base URL**: `https://devpulse-backend-jbzu.onrender.com`
 - **Health Check**: [https://devpulse-backend-jbzu.onrender.com/api/health](https://devpulse-backend-jbzu.onrender.com/api/health)
 
-## 🎥 Demo
-[Add demo video link here]
+---
 
 ### 🔒 Security & Repository Audit Status
 - **Clean Source Code**: All sensitive credentials, API keys, and environment variables (`.env`) are strictly excluded via `.gitignore`.
