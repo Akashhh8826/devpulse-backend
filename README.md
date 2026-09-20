@@ -104,7 +104,6 @@
 │   │   └── response.js               # Standardized success response helpers
 │   ├── app.js                        # Express app setup & middleware mounting
 │   └── server.js                     # HTTP server startup & process listeners
-├── .env                              # Active environment variables
 ├── .env.example                      # Template environment variables
 ├── package.json                      # Dependencies & npm scripts
 └── README.md                         # API Documentation & cURL examples
@@ -145,6 +144,8 @@ Common Error Codes:
 
 ## 📖 Complete API Endpoint Reference & cURL Examples
 
+> **Note**: All JSON response payloads shown below represent example response data returned by the API.
+
 ### 1. 📊 Dashboard Analytics (`/api/dashboard`)
 
 #### **GET** `/api/dashboard/summary`
@@ -153,7 +154,7 @@ Returns aggregate project/task metrics and next deadline.
   ```bash
   curl http://localhost:5000/api/dashboard/summary
   ```
-- **Response (200 OK):**
+- **Example Response (200 OK):**
   ```json
   {
     "success": true,
@@ -174,7 +175,7 @@ Computes weekly sprint velocity (% change in completed tasks) and overall comple
   ```bash
   curl http://localhost:5000/api/dashboard/velocity
   ```
-- **Response (200 OK):**
+- **Example Response (200 OK):**
   ```json
   {
     "success": true,
@@ -194,7 +195,7 @@ Returns paginated recent activity logs (created tasks, completed tasks, status c
   ```bash
   curl "http://localhost:5000/api/dashboard/activity?page=1&limit=5"
   ```
-- **Response (200 OK):**
+- **Example Response (200 OK):**
   ```json
   {
     "success": true,
@@ -223,7 +224,7 @@ Returns rule-based productivity tip string derived from completion rate and velo
   ```bash
   curl http://localhost:5000/api/dashboard/insight
   ```
-- **Response (200 OK):**
+- **Example Response (200 OK):**
   ```json
   {
     "success": true,
@@ -250,7 +251,7 @@ List all projects with filtering and sorting support.
   ```bash
   curl "http://localhost:5000/api/projects?status=in_progress&sort=progress"
   ```
-- **Response (200 OK):**
+- **Example Response (200 OK):**
   ```json
   {
     "success": true,
@@ -278,7 +279,7 @@ Get single project detail.
   ```bash
   curl http://localhost:5000/api/projects/proj-1
   ```
-- **Response (200 OK):**
+- **Example Response (200 OK):**
   ```json
   {
     "success": true,
@@ -309,7 +310,7 @@ Create a new project.
       "dueDate": "2026-12-31T00:00:00.000Z"
     }'
   ```
-- **Response (201 Created):**
+- **Example Response (201 Created):**
   ```json
   {
     "success": true,
@@ -337,7 +338,7 @@ Update an existing project.
       "progress": 75
     }'
   ```
-- **Response (200 OK):**
+- **Example Response (200 OK):**
   ```json
   {
     "success": true,
@@ -360,7 +361,7 @@ Delete a project and its associated tasks.
   ```bash
   curl -X DELETE http://localhost:5000/api/projects/proj-5
   ```
-- **Response (204 No Content)**
+- **Example Response (204 No Content)**
 
 ---
 
@@ -382,7 +383,7 @@ List tasks with optional project, status, priority filters, and Kanban board gro
   ```bash
   curl "http://localhost:5000/api/tasks?view=kanban"
   ```
-- **Response (Kanban View 200 OK):**
+- **Example Response (Kanban View 200 OK):**
   ```json
   {
     "success": true,
@@ -440,7 +441,7 @@ Create a new task under a valid project.
       "dueDate": "2026-09-30T00:00:00.000Z"
     }'
   ```
-- **Response (201 Created):**
+- **Example Response (201 Created):**
   ```json
   {
     "success": true,
@@ -469,7 +470,7 @@ Update task details or status. Setting `status: "done"` automatically populates 
       "status": "done"
     }'
   ```
-- **Response (200 OK):**
+- **Example Response (200 OK):**
   ```json
   {
     "success": true,
@@ -494,7 +495,7 @@ Delete a task.
   ```bash
   curl -X DELETE http://localhost:5000/api/tasks/task-8
   ```
-- **Response (204 No Content)**
+- **Example Response (204 No Content)**
 
 ---
 
@@ -506,7 +507,7 @@ Retrieve user profile and active UI settings.
   ```bash
   curl http://localhost:5000/api/users/profile
   ```
-- **Response (200 OK):**
+- **Example Response (200 OK):**
   ```json
   {
     "success": true,
@@ -534,7 +535,7 @@ Update user profile and theme/sidebar preferences.
       "sidebarCollapsed": true
     }'
   ```
-- **Response (200 OK):**
+- **Example Response (200 OK):**
   ```json
   {
     "success": true,
