@@ -2,6 +2,22 @@
 
 > High-performance RESTful API backend for **DevPulse** — developer productivity dashboard. Designed with Express, Zod validation, centralized error handling, and an isolated Data Access Layer (DAL) seeded with realistic productivity data. Matches the Week 1 DevPulse frontend data contracts with zero rework required.
 
+[![Deployment Status](https://img.shields.io/badge/Deployment-Live-success?style=for-the-badge&logo=vercel)](https://devpulse-backend.vercel.app/api/health)
+[![GitHub Repository](https://img.shields.io/badge/GitHub-Repository-blue?style=for-the-badge&logo=github)](https://github.com/Akashhh8826/devpulse-backend)
+
+---
+
+## 🌐 Live Deployment & Base URLs
+
+- **Live Production API Base URL**: `https://devpulse-backend.vercel.app`
+- **Health Check Endpoint**: `https://devpulse-backend.vercel.app/api/health`
+- **Alternative Render URL**: `https://devpulse-backend.onrender.com/api/health`
+
+### 🔒 Security & Repository Audit Status
+- **Clean Source Code**: All sensitive credentials, API keys, and environment variables (`.env`) are strictly excluded via `.gitignore`.
+- **Zero Secrets**: No secret tokens or private credentials exist in the codebase or git commit history.
+- **Deployment Ready**: Out-of-the-box support for Vercel serverless functions (`api/index.js`, `vercel.json`) and Render Web Services (`render.yaml`).
+
 ---
 
 ## 🚀 Quick Start & Setup Instructions
