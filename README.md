@@ -73,45 +73,87 @@
 
 - **Runtime**: Node.js
 - **Web Framework**: Express.js
+- **Database & ORM**: MongoDB with Mongoose (`mongoose`)
 - **Input Validation**: Zod
 - **CORS Management**: `cors` middleware
 - **Environment Management**: `dotenv`
-- **Data Layer**: Modular In-Memory Data Access Layer (`src/data/store.js`)
+- **Data Layer**: Asynchronous Mongoose-backed Data Access Layer (`src/data/store.js`)
 
 ### 📁 Deliverable Directory Structure
 ```
 /devpulse-backend
 ├── src/
+│   ├── config/
+│   │   └── db.js                 # MongoDB connection module
 │   ├── controllers/
-│   │   ├── users.controller.js       # User CRUD & profile/settings handlers
-│   │   ├── projects.controller.js    # Project CRUD, filtering, sorting handlers
-│   │   ├── tasks.controller.js       # Task CRUD, filtering, Kanban board handlers
-│   │   └── dashboard.controller.js   # Read-only aggregate analytics handlers
+│   │   ├── users.controller.js   # User CRUD & profile handlers
+│   │   ├── projects.controller.js# Project CRUD, filtering, sorting handlers
+│   │   ├── tasks.controller.js   # Task CRUD, Kanban, populate handlers
+│   │   └── dashboard.controller.js# Persistent analytics handlers
 │   ├── data/
-│   │   ├── seedData.js               # Initial realistic domain seed data
-│   │   └── store.js                  # In-Memory Data Access Layer (DAL)
+│   │   ├── seedData.js           # Initial realistic domain seed data
+│   │   └── store.js              # Mongoose-backed Data Access Layer (DAL)
 │   ├── middleware/
-│   │   ├── errorHandler.js           # Centralized JSON error middleware
-│   │   ├── notFoundHandler.js        # 404 Route Not Found middleware
-│   │   └── validation.js             # Zod input validation schemas
+│   │   ├── errorHandler.js       # Centralized error middleware (Zod & Mongoose)
+│   │   ├── notFoundHandler.js    # 404 Route Not Found middleware
+│   │   └── validation.js         # Zod input validation schemas
+│   ├── models/
+│   │   ├── User.js               # Mongoose User schema
+│   │   ├── Project.js            # Mongoose Project schema
+│   │   ├── Task.js               # Mongoose Task schema (ref: Project)
+│   │   └── Activity.js           # Mongoose Activity log schema
 │   ├── routes/
-│   │   ├── users.routes.js           # /api/users endpoints
-│   │   ├── projects.routes.js        # /api/projects endpoints
-│   │   ├── tasks.routes.js           # /api/tasks endpoints
-│   │   └── dashboard.routes.js       # /api/dashboard/* endpoints
+│   │   ├── users.routes.js       # /api/users endpoints
+│   │   ├── projects.routes.js    # /api/projects endpoints
+│   │   ├── tasks.routes.js       # /api/tasks endpoints
+│   │   └── dashboard.routes.js   # /api/dashboard/* endpoints
+│   ├── scripts/
+│   │   └── seed.js               # Database seeding script (npm run seed)
 │   ├── utils/
-│   │   ├── errors.js                 # Custom HTTP AppError classes
-│   │   └── response.js               # Standardized success response helpers
-│   ├── app.js                        # Express app setup & middleware mounting
-│   └── server.js                     # HTTP server startup & process listeners
-├── .env.example                      # Template environment variables
-├── package.json                      # Dependencies & npm scripts
-└── README.md                         # API Documentation & cURL examples
+│   │   ├── errors.js             # Custom HTTP AppError classes
+│   │   └── response.js           # Standardized success response helpers
+│   ├── app.js                    # Express app setup & middleware mounting
+│   └── server.js                 # HTTP server & DB startup listener
+├── .env.example                  # Environment variable template (includes MONGODB_URI)
+├── package.json                  # Dependencies & npm scripts (start, dev, seed)
+└── README.md                     # API Documentation & Setup guide
 ```
 
-### 🔗 Architectural Note: Week 1 Frontend Alignment & Future DB Migration
-- **Frontend Integration**: Built to directly serve the live Week 1 DevPulse frontend ([https://akashhh8826.github.io/developer-productivity-dashboard/](https://akashhh8826.github.io/developer-productivity-dashboard/)) across Dashboard, Projects, Tasks, and Settings views.
-- **Task 3 Database Readiness**: All business logic relies strictly on `store.js` methods (`store.findProjects()`, `store.createTask()`, etc.). Swapping the in-memory array store for PostgreSQL, MongoDB, or MySQL in Task 3 requires editing **only** `src/data/store.js` — zero changes needed in controllers or routes!
+---
+
+## 🗄️ Database Setup (Task 3: MongoDB & Mongoose Integration)
+
+DevPulse REST API Backend uses **MongoDB** with **Mongoose** for reliable data persistence.
+
+### 1. Prerequisites & Environment Variables
+Specify your MongoDB connection string in `.env` (refer to `.env.example`):
+```env
+PORT=5000
+NODE_ENV=development
+CORS_ORIGIN=*
+MONGODB_URI=mongodb://localhost:27017/devpulse
+```
+
+*For MongoDB Atlas Cloud:*
+```env
+MONGODB_URI=mongodb+srv://<username>:<password>@cluster0.mongodb.net/devpulse?retryWrites=true&w=majority
+```
+
+### 2. Database Seeding (`npm run seed`)
+Populate the database with initial sample users, projects, tasks, and activity logs:
+```bash
+npm run seed
+```
+
+### 3. Task 3 Architectural Enhancements
+- **Persistent Store**: In-memory data store replaced with Mongoose queries (`User`, `Project`, `Task`, `Activity`).
+- **Schema Validation**: Schema-level constraints for enums (`planning`, `in_progress`, `completed`, `on_hold` for Projects; `todo`, `in_progress`, `done` for Tasks; `low`, `medium`, `high` for Priority), range checks (`progress`: 0-100), required fields, and timestamps.
+- **Relationship Modeling & Population**: `Task.projectId` references `Project`. Supports `?populate=project` query param and `GET /api/tasks/:id/full`.
+- **Cascade Deletion Policy**: Deleting a `Project` automatically cleans up all associated `Task` documents.
+- **Persistent Analytics**: `/api/dashboard/*` analytics endpoints execute live database queries.
+
+### 🔗 Architectural Note: Week 1 Frontend Alignment
+- **Frontend Contract Compatibility**: Serves the Week 1 DevPulse frontend ([https://akashhh8826.github.io/developer-productivity-dashboard/](https://akashhh8826.github.io/developer-productivity-dashboard/)) with zero breaking changes to JSON key naming or endpoint signatures.
 
 ---
 

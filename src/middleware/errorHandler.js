@@ -27,6 +27,18 @@ function errorHandler(err, req, res, next) {
       field: e.path.join('.'),
       message: e.message,
     }));
+  } else if (err.name === 'ValidationError') {
+    statusCode = 400;
+    message = 'Validation failed';
+    code = 'VALIDATION_ERROR';
+    details = Object.values(err.errors).map((e) => ({
+      field: e.path,
+      message: e.message,
+    }));
+  } else if (err.name === 'CastError') {
+    statusCode = 400;
+    message = `Invalid format for field '${err.path}'`;
+    code = 'BAD_REQUEST';
   } else if (err.type === 'entity.parse.failed') {
     statusCode = 400;
     message = 'Invalid JSON payload in request body';

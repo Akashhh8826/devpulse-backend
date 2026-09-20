@@ -1,192 +1,179 @@
-const { initialUsers, initialProjects, initialTasks, initialActivityLogs } = require('./seedData');
+const User = require('../models/User');
+const Project = require('../models/Project');
+const Task = require('../models/Task');
+const Activity = require('../models/Activity');
 
 class DataStore {
-  constructor() {
-    this.users = [...initialUsers];
-    this.projects = [...initialProjects];
-    this.tasks = [...initialTasks];
-    this.activityLogs = [...initialActivityLogs];
-
-    this.userCounter = this.users.length + 1;
-    this.projectCounter = this.projects.length + 1;
-    this.taskCounter = this.tasks.length + 1;
-    this.activityCounter = this.activityLogs.length + 1;
-  }
-
   // --- LOG ACTIVITY ---
-  addActivityLog(type, title, description, projectId = null) {
-    const log = {
-      id: `act-${this.activityCounter++}`,
+  async addActivityLog(type, title, description, projectId = null) {
+    const id = `act-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    const log = await Activity.create({
+      _id: id,
       type,
       title,
       description,
       projectId,
-      timestamp: new Date().toISOString(),
-    };
-    this.activityLogs.unshift(log); // Keep most recent first
-    return log;
+      timestamp: new Date(),
+    });
+    return log.toJSON();
   }
 
   // --- PROJECT PROGRESS HELPER ---
-  recalculateProjectProgress(projectId) {
-    const projectTasks = this.tasks.filter((t) => t.projectId === projectId);
-    const project = this.projects.find((p) => p.id === projectId);
+  async recalculateProjectProgress(projectId) {
+    if (!projectId) return;
+
+    const project = await Project.findById(projectId);
     if (!project) return;
 
-    if (projectTasks.length === 0) {
-      // Keep existing progress or 0
-      return;
-    }
+    const projectTasks = await Task.find({ projectId });
+    if (projectTasks.length === 0) return;
 
-    const completed = projectTasks.filter((t) => t.status === 'done').length;
-    project.progress = Math.round((completed / projectTasks.length) * 100);
-    project.updatedAt = new Date().toISOString();
+    const completedCount = projectTasks.filter((t) => t.status === 'done').length;
+    project.progress = Math.round((completedCount / projectTasks.length) * 100);
+    await project.save();
   }
 
   // ==========================================
   // USERS DAL
   // ==========================================
-  findAllUsers() {
-    return [...this.users];
+  async findAllUsers() {
+    const users = await User.find().sort({ createdAt: 1 });
+    return users.map((u) => u.toJSON());
   }
 
-  findUserById(id) {
-    return this.users.find((u) => u.id === id) || null;
+  async findUserById(id) {
+    const user = await User.findById(id);
+    return user ? user.toJSON() : null;
   }
 
-  createUser(userData) {
-    const now = new Date().toISOString();
-    const newUser = {
-      id: `user-${this.userCounter++}`,
+  async createUser(userData) {
+    const count = await User.countDocuments();
+    const id = userData.id || `user-${count + 1}-${Date.now()}`;
+    const avatarInitials =
+      userData.avatarInitials ||
+      (userData.name
+        ? userData.name
+            .split(' ')
+            .map((n) => n[0])
+            .join('')
+            .toUpperCase()
+            .slice(0, 2)
+        : 'UR');
+
+    const newUser = await User.create({
+      _id: id,
       name: userData.name,
       email: userData.email,
-      avatarInitials: userData.avatarInitials || userData.name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2),
+      avatarInitials,
       theme: userData.theme || 'sunset-rose',
       sidebarCollapsed: userData.sidebarCollapsed ?? false,
-      createdAt: now,
-      updatedAt: now,
-    };
-    this.users.push(newUser);
-    return newUser;
+    });
+
+    return newUser.toJSON();
   }
 
-  updateUser(id, updates) {
-    const index = this.users.findIndex((u) => u.id === id);
-    if (index === -1) return null;
-
-    const updatedUser = {
-      ...this.users[index],
-      ...updates,
-      updatedAt: new Date().toISOString(),
-    };
-    this.users[index] = updatedUser;
-    return updatedUser;
+  async updateUser(id, updates) {
+    const user = await User.findByIdAndUpdate(id, updates, {
+      new: true,
+      runValidators: true,
+    });
+    return user ? user.toJSON() : null;
   }
 
-  deleteUser(id) {
-    const index = this.users.findIndex((u) => u.id === id);
-    if (index === -1) return false;
-    this.users.splice(index, 1);
-    return true;
+  async deleteUser(id) {
+    const user = await User.findByIdAndDelete(id);
+    return !!user;
   }
 
   // ==========================================
   // PROJECTS DAL
   // ==========================================
-  findAllProjects({ status, sort = 'recent' } = {}) {
-    let result = [...this.projects];
-
+  async findAllProjects({ status, sort = 'recent' } = {}) {
+    const filter = {};
     if (status) {
-      const normalizedStatus = status.replace(/-/g, '_');
-      result = result.filter((p) => p.status === normalizedStatus);
+      filter.status = status.replace(/-/g, '_');
     }
 
-    // Sorting
+    let sortOption = { createdAt: -1 };
     switch (sort) {
       case 'progress':
-        result.sort((a, b) => b.progress - a.progress);
+        sortOption = { progress: -1 };
         break;
       case 'dueDate':
-        result.sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+        sortOption = { dueDate: 1 };
         break;
       case 'name':
-        result.sort((a, b) => a.name.localeCompare(b.name));
+        sortOption = { name: 1 };
         break;
       case 'recent':
       default:
-        result.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        sortOption = { createdAt: -1 };
         break;
     }
 
-    return result;
+    const projects = await Project.find(filter).sort(sortOption);
+    return projects.map((p) => p.toJSON());
   }
 
-  findProjectById(id) {
-    return this.projects.find((p) => p.id === id) || null;
+  async findProjectById(id) {
+    const project = await Project.findById(id);
+    return project ? project.toJSON() : null;
   }
 
-  createProject(projectData) {
-    const now = new Date().toISOString();
-    const newProject = {
-      id: `proj-${this.projectCounter++}`,
+  async createProject(projectData) {
+    const count = await Project.countDocuments();
+    const id = projectData.id || `proj-${count + 1}-${Date.now()}`;
+
+    const newProject = await Project.create({
+      _id: id,
       name: projectData.name,
       description: projectData.description || '',
       status: projectData.status || 'planning',
       progress: projectData.progress ?? 0,
       dueDate: projectData.dueDate,
-      createdAt: now,
-      updatedAt: now,
-    };
-    this.projects.push(newProject);
+    });
 
-    this.addActivityLog(
+    await this.addActivityLog(
       'project_created',
       `Project Created: ${newProject.name}`,
       `New project "${newProject.name}" was created.`,
-      newProject.id
+      newProject._id
     );
 
-    return newProject;
+    return newProject.toJSON();
   }
 
-  updateProject(id, updates) {
-    const index = this.projects.findIndex((p) => p.id === id);
-    if (index === -1) return null;
+  async updateProject(id, updates) {
+    const project = await Project.findById(id);
+    if (!project) return null;
 
-    const oldProject = this.projects[index];
-    const updatedProject = {
-      ...oldProject,
-      ...updates,
-      updatedAt: new Date().toISOString(),
-    };
+    const oldStatus = project.status;
+    Object.assign(project, updates);
+    await project.save();
 
-    this.projects[index] = updatedProject;
-
-    if (updates.status && updates.status !== oldProject.status) {
-      this.addActivityLog(
+    if (updates.status && updates.status !== oldStatus) {
+      await this.addActivityLog(
         'project_status_changed',
-        `Project Status Updated: ${updatedProject.name}`,
-        `Status changed from ${oldProject.status} to ${updatedProject.status}.`,
-        updatedProject.id
+        `Project Status Updated: ${project.name}`,
+        `Status changed from ${oldStatus} to ${project.status}.`,
+        project._id
       );
     }
 
-    return updatedProject;
+    return project.toJSON();
   }
 
-  deleteProject(id) {
-    const index = this.projects.findIndex((p) => p.id === id);
-    if (index === -1) return false;
+  async deleteProject(id) {
+    const project = await Project.findByIdAndDelete(id);
+    if (!project) return false;
 
-    const deletedProject = this.projects[index];
-    this.projects.splice(index, 1);
     // Cascade delete associated tasks
-    this.tasks = this.tasks.filter((t) => t.projectId !== id);
+    await Task.deleteMany({ projectId: id });
 
-    this.addActivityLog(
+    await this.addActivityLog(
       'project_deleted',
-      `Project Deleted: ${deletedProject.name}`,
-      `Project "${deletedProject.name}" and its tasks were removed.`
+      `Project Deleted: ${project.name}`,
+      `Project "${project.name}" and its tasks were removed.`
     );
 
     return true;
@@ -195,129 +182,145 @@ class DataStore {
   // ==========================================
   // TASKS DAL
   // ==========================================
-  findAllTasks({ projectId, status, priority, sort = 'dueDate' } = {}) {
-    let result = [...this.tasks];
+  async findAllTasks({ projectId, status, priority, sort = 'dueDate', populate } = {}) {
+    const filter = {};
 
     if (projectId) {
-      result = result.filter((t) => t.projectId === projectId);
+      filter.projectId = projectId;
     }
-
     if (status) {
-      const normalizedStatus = status.replace(/-/g, '_');
-      result = result.filter((t) => t.status === normalizedStatus);
+      filter.status = status.replace(/-/g, '_');
     }
-
     if (priority) {
-      result = result.filter((t) => t.priority === priority);
+      filter.priority = priority;
     }
 
-    if (sort === 'dueDate') {
-      result.sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
-    } else if (sort === 'recent') {
-      result.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    let sortOption = { dueDate: 1 };
+    if (sort === 'recent') {
+      sortOption = { createdAt: -1 };
     }
 
-    return result;
+    let query = Task.find(filter).sort(sortOption);
+
+    if (populate === 'project' || populate === true || populate === 'true') {
+      query = query.populate('projectId');
+    }
+
+    const tasks = await query;
+    return tasks.map((t) => {
+      const json = t.toJSON();
+      if (populate && t.projectId && typeof t.projectId === 'object' && t.projectId.name) {
+        json.project = t.projectId.toJSON ? t.projectId.toJSON() : t.projectId;
+        json.projectId = t.projectId._id || t.projectId.id;
+      }
+      return json;
+    });
   }
 
-  findTaskById(id) {
-    return this.tasks.find((t) => t.id === id) || null;
+  async findTaskById(id, { populate } = {}) {
+    let query = Task.findById(id);
+    if (populate === 'project' || populate === true || populate === 'true') {
+      query = query.populate('projectId');
+    }
+
+    const task = await query;
+    if (!task) return null;
+
+    const json = task.toJSON();
+    if (populate && task.projectId && typeof task.projectId === 'object' && task.projectId.name) {
+      json.project = task.projectId.toJSON ? task.projectId.toJSON() : task.projectId;
+      json.projectId = task.projectId._id || task.projectId.id;
+    }
+    return json;
   }
 
-  createTask(taskData) {
-    const now = new Date().toISOString();
+  async createTask(taskData) {
+    const count = await Task.countDocuments();
+    const id = taskData.id || `task-${count + 1}-${Date.now()}`;
     const isDone = taskData.status === 'done';
+    const completedAt = isDone ? new Date() : null;
 
-    const newTask = {
-      id: `task-${this.taskCounter++}`,
+    const newTask = await Task.create({
+      _id: id,
       projectId: taskData.projectId,
       title: taskData.title,
       description: taskData.description || '',
       status: taskData.status || 'todo',
       priority: taskData.priority || 'medium',
       dueDate: taskData.dueDate,
-      createdAt: now,
-      updatedAt: now,
-      completedAt: isDone ? now : null,
-    };
+      completedAt,
+    });
 
-    this.tasks.push(newTask);
-    this.recalculateProjectProgress(newTask.projectId);
+    await this.recalculateProjectProgress(newTask.projectId);
 
-    this.addActivityLog(
+    await this.addActivityLog(
       'task_created',
       `Task Created: ${newTask.title}`,
       `New task added under project.`,
       newTask.projectId
     );
 
-    return newTask;
+    return newTask.toJSON();
   }
 
-  updateTask(id, updates) {
-    const index = this.tasks.findIndex((t) => t.id === id);
-    if (index === -1) return null;
+  async updateTask(id, updates) {
+    const task = await Task.findById(id);
+    if (!task) return null;
 
-    const oldTask = this.tasks[index];
-    const now = new Date().toISOString();
+    const oldStatus = task.status;
+    let completedAt = task.completedAt;
 
-    let completedAt = oldTask.completedAt;
     if (updates.status) {
-      if (updates.status === 'done' && oldTask.status !== 'done') {
-        completedAt = now;
-      } else if (updates.status !== 'done' && oldTask.status === 'done') {
+      if (updates.status === 'done' && oldStatus !== 'done') {
+        completedAt = new Date();
+      } else if (updates.status !== 'done' && oldStatus === 'done') {
         completedAt = null;
       }
     }
 
-    const updatedTask = {
-      ...oldTask,
-      ...updates,
-      completedAt,
-      updatedAt: now,
-    };
+    Object.assign(task, updates);
+    task.completedAt = completedAt;
+    await task.save();
 
-    this.tasks[index] = updatedTask;
-    this.recalculateProjectProgress(updatedTask.projectId);
+    await this.recalculateProjectProgress(task.projectId);
 
-    if (updates.status === 'done' && oldTask.status !== 'done') {
-      this.addActivityLog(
+    if (updates.status === 'done' && oldStatus !== 'done') {
+      await this.addActivityLog(
         'task_completed',
-        `Task Completed: ${updatedTask.title}`,
-        `Task "${updatedTask.title}" marked as completed.`,
-        updatedTask.projectId
+        `Task Completed: ${task.title}`,
+        `Task "${task.title}" marked as completed.`,
+        task.projectId
       );
     }
 
-    return updatedTask;
+    return task.toJSON();
   }
 
-  deleteTask(id) {
-    const index = this.tasks.findIndex((t) => t.id === id);
-    if (index === -1) return false;
+  async deleteTask(id) {
+    const task = await Task.findByIdAndDelete(id);
+    if (!task) return false;
 
-    const deletedTask = this.tasks[index];
-    this.tasks.splice(index, 1);
-    this.recalculateProjectProgress(deletedTask.projectId);
+    await this.recalculateProjectProgress(task.projectId);
     return true;
   }
 
   // ==========================================
   // DASHBOARD / ANALYTICS DAL
   // ==========================================
-  getDashboardSummary() {
-    const totalProjects = this.projects.length;
-    const totalTasks = this.tasks.length;
-    const completedTasks = this.tasks.filter((t) => t.status === 'done').length;
+  async getDashboardSummary() {
+    const totalProjects = await Project.countDocuments();
+    const totalTasks = await Task.countDocuments();
+    const completedTasks = await Task.countDocuments({ status: 'done' });
     const pendingTasks = totalTasks - completedTasks;
 
     const now = new Date();
-    const upcomingDeadlines = this.tasks
-      .filter((t) => t.status !== 'done' && new Date(t.dueDate) >= now)
-      .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+    const upcomingTasks = await Task.find({
+      status: { $ne: 'done' },
+      dueDate: { $gte: now },
+    }).sort({ dueDate: 1 });
 
-    const upcomingDeadlinesCount = upcomingDeadlines.length;
-    const nextDeadlineDate = upcomingDeadlines[0] ? upcomingDeadlines[0].dueDate : null;
+    const upcomingDeadlinesCount = upcomingTasks.length;
+    const nextDeadlineDate = upcomingTasks[0] ? upcomingTasks[0].dueDate : null;
 
     return {
       totalProjects,
@@ -329,22 +332,18 @@ class DataStore {
     };
   }
 
-  getDashboardVelocity() {
+  async getDashboardVelocity() {
     const now = new Date();
     const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     const twoWeeksAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
 
-    const completedThisWeek = this.tasks.filter((t) => {
-      if (!t.completedAt) return false;
-      const completedDate = new Date(t.completedAt);
-      return completedDate >= oneWeekAgo && completedDate <= now;
-    }).length;
+    const completedThisWeek = await Task.countDocuments({
+      completedAt: { $gte: oneWeekAgo, $lte: now },
+    });
 
-    const completedLastWeek = this.tasks.filter((t) => {
-      if (!t.completedAt) return false;
-      const completedDate = new Date(t.completedAt);
-      return completedDate >= twoWeeksAgo && completedDate < oneWeekAgo;
-    }).length;
+    const completedLastWeek = await Task.countDocuments({
+      completedAt: { $gte: twoWeeksAgo, $lt: oneWeekAgo },
+    });
 
     let sprintVelocity = 0;
     if (completedLastWeek === 0) {
@@ -353,9 +352,10 @@ class DataStore {
       sprintVelocity = Math.round(((completedThisWeek - completedLastWeek) / completedLastWeek) * 100);
     }
 
-    const totalTasks = this.tasks.length;
-    const completedTasks = this.tasks.filter((t) => t.status === 'done').length;
-    const overallCompletionPercent = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+    const totalTasks = await Task.countDocuments();
+    const completedTasks = await Task.countDocuments({ status: 'done' });
+    const overallCompletionPercent =
+      totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
     return {
       completedThisWeek,
@@ -365,28 +365,31 @@ class DataStore {
     };
   }
 
-  getDashboardActivity({ page = 1, limit = 10 } = {}) {
+  async getDashboardActivity({ page = 1, limit = 10 } = {}) {
     const pageNum = parseInt(page, 10) || 1;
     const limitNum = parseInt(limit, 10) || 10;
-    const startIndex = (pageNum - 1) * limitNum;
-    const endIndex = startIndex + limitNum;
+    const skip = (pageNum - 1) * limitNum;
 
-    const paginatedLogs = this.activityLogs.slice(startIndex, endIndex);
+    const totalItems = await Activity.countDocuments();
+    const logs = await Activity.find()
+      .sort({ timestamp: -1, createdAt: -1 })
+      .skip(skip)
+      .limit(limitNum);
 
     return {
-      logs: paginatedLogs,
+      logs: logs.map((a) => a.toJSON()),
       pagination: {
         page: pageNum,
         limit: limitNum,
-        totalItems: this.activityLogs.length,
-        totalPages: Math.ceil(this.activityLogs.length / limitNum) || 1,
+        totalItems,
+        totalPages: Math.ceil(totalItems / limitNum) || 1,
       },
     };
   }
 
-  getDashboardInsight() {
-    const summary = this.getDashboardSummary();
-    const velocity = this.getDashboardVelocity();
+  async getDashboardInsight() {
+    const summary = await this.getDashboardSummary();
+    const velocity = await this.getDashboardVelocity();
 
     let tip = '';
     if (summary.totalTasks === 0) {
