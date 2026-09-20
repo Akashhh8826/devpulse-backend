@@ -1,630 +1,306 @@
 # DevPulse REST API Backend
 
-> High-performance RESTful API backend for **DevPulse** — developer productivity dashboard. Designed with Express, Zod validation, centralized error handling, and an isolated Data Access Layer (DAL) seeded with realistic productivity data. Matches the Week 1 DevPulse frontend data contracts with zero rework required.
+> High-performance RESTful API backend for **DevPulse** — developer productivity dashboard and project/task management platform. 
+
+Task 3 upgraded the DevPulse backend from Task 2's transient in-memory storage layer to persistent **MongoDB** database storage using **Mongoose**, preserving full backwards compatibility with all existing API contracts and the Week 1 frontend integration.
 
 [![Deployment Status](https://img.shields.io/badge/Deployment-Live-success?style=for-the-badge&logo=render)](https://devpulse-backend-jbzu.onrender.com/api/health)
 [![GitHub Repository](https://img.shields.io/badge/GitHub-Repository-blue?style=for-the-badge&logo=github)](https://github.com/Akashhh8826/devpulse-backend)
 
 ---
 
-## 🌐 Live API & Base URLs
+## ⚡ Features
 
-- **Live Production API Base URL**: `https://devpulse-backend-jbzu.onrender.com`
-- **Health Check**: [https://devpulse-backend-jbzu.onrender.com/api/health](https://devpulse-backend-jbzu.onrender.com/api/health)
-
----
-
-### 🔒 Security & Repository Audit Status
-- **Clean Source Code**: All sensitive credentials, API keys, and environment variables (`.env`) are strictly excluded via `.gitignore`.
-- **Zero Secrets**: No secret tokens or private credentials exist in the codebase or git commit history.
-- **Deployment Ready**: Standard deployment support for Render Web Services (`render.yaml`) and Express server.
-
----
-
-## 🚀 Quick Start & Setup Instructions
-
-### Prerequisites
-- **Node.js**: v18.x or higher
-- **npm**: v9.x or higher
-
-### Installation
-
-1. **Clone or navigate to the project directory:**
-   ```bash
-   cd devpulse-backend
-   ```
-
-2. **Install dependencies:**
-   ```bash
-   npm install
-   ```
-
-3. **Configure Environment Variables:**
-   Copy the example environment file:
-   ```bash
-   cp .env.example .env
-   ```
-   *Default `.env` configuration:*
-   ```env
-   PORT=5000
-   NODE_ENV=development
-   CORS_ORIGIN=*
-   ```
-
-4. **Start the API Server:**
-   - **Development mode (with auto-reload):**
-     ```bash
-     npm run dev
-     ```
-   - **Production mode:**
-     ```bash
-     npm start
-     ```
-
-5. **Verify API Health:**
-   Visit `http://localhost:5000/api/health` or run:
-   ```bash
-   curl http://localhost:5000/api/health
-   ```
+- **User Management**: User profile and UI preferences (`theme`, `sidebarCollapsed`).
+- **Project Management**: Project tracking with status enums (`planning`, `in_progress`, `completed`, `on_hold`), progress tracking (0-100%), and due dates.
+- **Task Management**: Task tracking with Kanban board status (`todo`, `in_progress`, `done`), priority levels (`low`, `medium`, `high`), and auto-populated completion dates (`completedAt`).
+- **Full persistent CRUD**: Complete Create, Read, Update, Delete capabilities across all domain resources.
+- **MongoDB Persistent Storage**: Data survives server restarts and crashes.
+- **Mongoose Schemas & Models**: Strongly-typed object data modeling for User, Project, Task, and Activity.
+- **Schema-Level Validation**: Strict field constraints, enum restrictions, required parameters, and date checks.
+- **Project → Task Relationship**: Tasks explicitly reference Project documents via Mongoose `ObjectId` references.
+- **Cascading Deletion**: Deleting a project automatically deletes all associated tasks to prevent orphaned data.
+- **Persistent Dashboard Analytics**: Live computation of sprint velocity, completion rate, activity feeds, and rule-based productivity insights directly from MongoDB queries.
+- **Centralized Error Handling**: Standardized JSON error response format matching Zod and Mongoose validation errors.
+- **Environment-Driven Configuration**: Secure variable loading via `dotenv`.
+- **RESTful Endpoints**: Clean, standardized REST API routes with pagination and filtering support.
 
 ---
 
-## 🛠️ Tech Stack & Architecture
+## 🛠️ Tech Stack
 
 - **Runtime**: Node.js
 - **Web Framework**: Express.js
-- **Database & ORM**: MongoDB with Mongoose (`mongoose`)
+- **Database**: MongoDB / MongoDB Atlas
+- **Object Data Modeling (ODM)**: Mongoose
 - **Input Validation**: Zod
-- **CORS Management**: `cors` middleware
 - **Environment Management**: `dotenv`
-- **Data Layer**: Asynchronous Mongoose-backed Data Access Layer (`src/data/store.js`)
+- **CORS Management**: `cors` middleware
+- **Development Server Runner**: Node `--watch` / Nodemon
 
-### 📁 Deliverable Directory Structure
+---
+
+## 📁 Project Structure
+
 ```
-/devpulse-backend
+devpulse-backend/
 ├── src/
 │   ├── config/
-│   │   └── db.js                 # MongoDB connection module
+│   │   ├── database.js          # Primary MongoDB Mongoose connection module
+│   │   └── db.js                # Database connection export
 │   ├── controllers/
-│   │   ├── users.controller.js   # User CRUD & profile handlers
-│   │   ├── projects.controller.js# Project CRUD, filtering, sorting handlers
-│   │   ├── tasks.controller.js   # Task CRUD, Kanban, populate handlers
-│   │   └── dashboard.controller.js# Persistent analytics handlers
+│   │   ├── dashboard.controller.js# Persistent analytics handlers
+│   │   ├── projects.controller.js # Project CRUD handlers
+│   │   ├── tasks.controller.js     # Task CRUD, Kanban, & populate handlers
+│   │   └── users.controller.js     # User CRUD & profile handlers
 │   ├── data/
-│   │   ├── seedData.js           # Initial realistic domain seed data
-│   │   └── store.js              # Mongoose-backed Data Access Layer (DAL)
+│   │   ├── seedData.js          # Seed dataset definitions
+│   │   └── store.js             # Mongoose Data Access Layer (DAL)
 │   ├── middleware/
-│   │   ├── errorHandler.js       # Centralized error middleware (Zod & Mongoose)
-│   │   ├── notFoundHandler.js    # 404 Route Not Found middleware
-│   │   └── validation.js         # Zod input validation schemas
+│   │   ├── errorHandler.js      # Centralized JSON error handler
+│   │   ├── notFoundHandler.js   # 404 Not Found route handler
+│   │   └── validation.js        # Zod input validation schemas
 │   ├── models/
-│   │   ├── User.js               # Mongoose User schema
-│   │   ├── Project.js            # Mongoose Project schema
-│   │   ├── Task.js               # Mongoose Task schema (ref: Project)
-│   │   └── Activity.js           # Mongoose Activity log schema
+│   │   ├── Activity.js          # Activity Mongoose schema
+│   │   ├── Project.js           # Project Mongoose schema
+│   │   ├── Task.js              # Task Mongoose schema (ref: Project)
+│   │   └── User.js              # User Mongoose schema
 │   ├── routes/
-│   │   ├── users.routes.js       # /api/users endpoints
-│   │   ├── projects.routes.js    # /api/projects endpoints
-│   │   ├── tasks.routes.js       # /api/tasks endpoints
-│   │   └── dashboard.routes.js   # /api/dashboard/* endpoints
+│   │   ├── dashboard.routes.js   # /api/dashboard/* routes
+│   │   ├── projects.routes.js    # /api/projects routes
+│   │   ├── tasks.routes.js       # /api/tasks routes
+│   │   └── users.routes.js       # /api/users routes
 │   ├── scripts/
-│   │   └── seed.js               # Database seeding script (npm run seed)
+│   │   └── seed.js              # Independent database seed script
 │   ├── utils/
-│   │   ├── errors.js             # Custom HTTP AppError classes
-│   │   └── response.js           # Standardized success response helpers
-│   ├── app.js                    # Express app setup & middleware mounting
-│   └── server.js                 # HTTP server & DB startup listener
-├── .env.example                  # Environment variable template (includes MONGODB_URI)
-├── package.json                  # Dependencies & npm scripts (start, dev, seed)
-└── README.md                     # API Documentation & Setup guide
+│   │   ├── errors.js            # Custom AppError classes
+│   │   └── response.js          # Standardized JSON response helpers
+│   ├── app.js                   # Express app setup & middleware mounting
+│   └── server.js                # HTTP server & database entry point
+├── .env.example                 # Safe environment variable template
+├── package.json                 # Dependencies & npm scripts
+└── README.md                    # Project documentation
 ```
 
 ---
 
-## 🗄️ Database Setup
+## 🗄️ Database Design
 
-DevPulse REST API Backend uses **MongoDB** with **Mongoose** for persistent data storage.
+The database contains three main domain models (plus an audit `Activity` log model):
 
-### Local MongoDB
-To run MongoDB locally on port 27017, set `MONGODB_URI` in your `.env` file:
+### 1. User (`src/models/User.js`)
+- `id`: String (Required, Unique public ID e.g. `user-1`)
+- `name`: String (Required, trimmed)
+- `email`: String (Required, Unique, lowercase)
+- `avatarInitials`: String (Default: '')
+- `theme`: String (Default: 'sunset-rose')
+- `sidebarCollapsed`: Boolean (Default: false)
+- `createdAt` / `updatedAt`: Timestamps
+
+### 2. Project (`src/models/Project.js`)
+- `id`: String (Required, Unique public ID e.g. `proj-1`)
+- `name`: String (Required, trimmed)
+- `description`: String (Default: '')
+- `status`: String (Enum: `['planning', 'in_progress', 'completed', 'on_hold']`, Default: 'planning')
+- `progress`: Number (Min: 0, Max: 100, Default: 0)
+- `dueDate`: Date (Required)
+- `createdAt` / `updatedAt`: Timestamps
+
+### 3. Task (`src/models/Task.js`)
+- `id`: String (Required, Unique public ID e.g. `task-1`)
+- `projectId`: Mongoose `ObjectId` (Required, `ref: 'Project'`)
+- `projectPublicId`: String (Required, public project string ID e.g. `proj-1`)
+- `title`: String (Required, trimmed)
+- `description`: String (Default: '')
+- `status`: String (Enum: `['todo', 'in_progress', 'done']`, Default: 'todo')
+- `priority`: String (Enum: `['low', 'medium', 'high']`, Default: 'medium')
+- `dueDate`: Date (Required)
+- `completedAt`: Date (Nullable, auto-populated when `status: 'done'`)
+- `createdAt` / `updatedAt`: Timestamps
+
+### Project → Task Relationship
+`Task.projectId` references the `Project` model via a proper Mongoose `ObjectId` reference, ensuring database-level relational integrity. In public API responses, `projectId` cleanly resolves to the project's public string ID (e.g. `proj-1`), and optional population (`?populate=project` or `GET /api/tasks/:id/full`) embeds the full Project object.
+
+---
+
+## 💻 MongoDB Setup
+
+### 1. Local MongoDB
+Ensure a local MongoDB server is running on port `27017` and set your URI in `.env`:
 ```env
 MONGODB_URI=mongodb://localhost:27017/devpulse
 ```
 
-### MongoDB Atlas Cloud Setup
-To connect to MongoDB Atlas cloud database:
-1. Create a free cluster on [MongoDB Atlas](https://www.mongodb.com/cloud/atlas).
-2. Create a database user with read/write credentials.
-3. Add your current IP address (or `0.0.0.0/0` for cloud deployment) to Network Access IP Access List.
-4. Copy the application connection string format.
-5. Add the URI to your `.env` file:
+### 2. MongoDB Atlas Cloud
+To use MongoDB Atlas in cloud or staging environments:
+1. Create a free cluster at [MongoDB Atlas](https://www.mongodb.com/cloud/atlas).
+2. Create a database user with read/write privileges.
+3. Add your IP address to Network Access (`0.0.0.0/0` for cloud services like Render).
+4. Copy your cluster connection string and place it into `.env`:
 ```env
 MONGODB_URI=mongodb+srv://<username>:<password>@cluster0.mongodb.net/devpulse?retryWrites=true&w=majority
 ```
 
-### Seed Database
-Populate the database with realistic sample data:
+---
+
+## 🌐 Environment Variables
+
+Environment variables are loaded via `dotenv`. Keep local credentials in `.env` (excluded by `.gitignore`). Use `.env.example` as a template:
+
+```env
+PORT=5000
+NODE_ENV=development
+CORS_ORIGIN=*
+MONGODB_URI=mongodb://localhost:27017/devpulse
+```
+
+---
+
+## 🚀 Installation & Running Locally
+
+1. **Clone the repository and install dependencies:**
+   ```bash
+   npm install
+   ```
+
+2. **Configure environment variables:**
+   ```bash
+   cp .env.example .env
+   ```
+
+3. **Start the development server:**
+   ```bash
+   npm run dev
+   ```
+
+4. **Start the production server:**
+   ```bash
+   npm start
+   ```
+
+---
+
+## 🌱 Database Seeding
+
+To populate MongoDB with realistic initial sample users, projects, tasks, and activity logs:
+
 ```bash
 npm run seed
 ```
 
-### Start Development Server
-Start the Express server in auto-reloading development mode:
-```bash
-npm run dev
-```
-
-> **Project Deletion Policy**: Deleting a project also deletes all tasks associated with that project.
+This runs `node src/scripts/seed.js`, which connects to MongoDB, clears existing collections, inserts the seed dataset, and exits cleanly.
 
 ---
 
-## 🔄 Task 2 → Task 3 Evolution
+## 📖 API Endpoints Reference
 
-| Capability | Task 2 (In-Memory REST API) | Task 3 (MongoDB + Mongoose Integration) |
+### Health Check
+- **`GET /api/health`**: Service availability & status
+
+### Users API (`/api/users`)
+- **`GET /api/users`**: List all users
+- **`POST /api/users`**: Create a new user
+- **`GET /api/users/:id`**: Get single user details
+- **`PUT /api/users/:id`** / **`PATCH /api/users/:id`**: Update user details
+- **`DELETE /api/users/:id`**: Delete user
+- **`GET /api/users/profile`**: Get current user profile (`user-1` default)
+- **`PUT /api/users/profile`** / **`PATCH /api/users/profile`**: Update current user profile
+
+### Projects API (`/api/projects`)
+- **`GET /api/projects`**: List projects (supports `status` filter and `sort` param)
+- **`POST /api/projects`**: Create a new project
+- **`GET /api/projects/:id`**: Get project details
+- **`PUT /api/projects/:id`** / **`PATCH /api/projects/:id`**: Update project status or progress
+- **`DELETE /api/projects/:id`**: Delete project (triggers task cascade deletion)
+
+### Tasks API (`/api/tasks`)
+- **`GET /api/tasks`**: List tasks (supports `projectId`, `status`, `priority`, `sort`, `view=kanban`, and `populate=project`)
+- **`POST /api/tasks`**: Create a new task under a valid project
+- **`GET /api/tasks/:id`**: Get task details (supports `?populate=project`)
+- **`GET /api/tasks/:id/full`**: Get task with fully populated project details
+- **`PUT /api/tasks/:id`** / **`PATCH /api/tasks/:id`**: Update task details or status
+- **`DELETE /api/tasks/:id`**: Delete task
+
+### Dashboard API (`/api/dashboard`)
+- **`GET /api/dashboard/summary`**: Persistent aggregate metrics (total projects, total tasks, completed, pending, next deadline)
+- **`GET /api/dashboard/velocity`**: Sprint velocity (% task completion change)
+- **`GET /api/dashboard/activity`**: Paginated recent activity log feed (`page`, `limit`)
+- **`GET /api/dashboard/insight`**: Dynamic productivity tips and metrics
+
+---
+
+## 🛡️ Validation & Error Handling
+
+- **Dual Validation**: Request payloads are validated at the middleware layer using Zod schemas and enforced at the database level using Mongoose schemas.
+- **Relational Integrity**: Attempting to create or update a task with a non-existent `projectId` is rejected with an HTTP `400 Bad Request` error:
+  ```json
+  {
+    "error": {
+      "message": "Cannot create task: Project with ID 'nonexistent-id' does not exist",
+      "code": "BAD_REQUEST"
+    }
+  }
+  ```
+
+---
+
+## 🔄 Task 3 Database Integration (Task 2 vs Task 3)
+
+| Feature | Task 2 Backend | Task 3 Backend |
 | :--- | :--- | :--- |
-| **Data Persistence** | Transient Node.js memory arrays | Persistent MongoDB database collections |
-| **Data Modeling** | Plain JavaScript objects | Strict Mongoose Schemas (`User`, `Project`, `Task`, `Activity`) |
-| **Relationships** | Manual array filtering | Mongoose `ObjectId` `ref: 'Project'` relationship & population |
-| **Project Deletion** | Array item filtering | **Cascade Deletion** (deleting a project also deletes all associated tasks) |
-| **Analytics** | In-memory array math | Persistent database queries and aggregation pipelines |
-| **Seeding** | Memory array instantiation | Dedicated seed script (`npm run seed`) |
-| **Configuration** | Static port config | Environment variable driven (`MONGODB_URI`, `PORT`, `NODE_ENV`) |
-
-### 🔗 Architectural Note: Week 1 Frontend Alignment
-- **Frontend Contract Compatibility**: Serves the Week 1 DevPulse frontend ([https://akashhh8826.github.io/developer-productivity-dashboard/](https://akashhh8826.github.io/developer-productivity-dashboard/)) with zero breaking changes to JSON key naming or endpoint signatures.
+| **Data Storage** | In-memory JavaScript arrays | Persistent MongoDB database collections |
+| **Data Retention** | Data lost on server restart | Data survives server restarts and crashes |
+| **Data Models** | Plain JavaScript objects | Mongoose Schemas (`User`, `Project`, `Task`, `Activity`) |
+| **Relationships** | In-memory array filtering | Mongoose `ObjectId` `ref: 'Project'` relationship & population |
+| **Validation** | Zod middleware | Zod middleware + Mongoose schema validation |
+| **Project Deletion** | Array filtering | **Cascade Deletion** (deleting a project deletes associated tasks) |
+| **Dashboard** | Array calculation | Persistent MongoDB live queries |
+| **API Contract** | Standard REST API | 100% preserved response structure and endpoint paths |
 
 ---
 
-## 📌 Standard JSON Error Response Format
+## 🗑️ Cascade Deletion Policy
 
-All errors return consistent HTTP status codes paired with uniform JSON structures:
-
-```json
-{
-  "error": {
-    "message": "Validation failed for request payload",
-    "code": "VALIDATION_ERROR",
-    "details": [
-      {
-        "field": "status",
-        "message": "Status must be one of: planning, in_progress, completed, on_hold"
-      }
-    ]
-  }
-}
-```
-
-Common Error Codes:
-- `400 Bad Request` (`BAD_REQUEST`, `VALIDATION_ERROR`)
-- `404 Not Found` (`NOT_FOUND`)
-- `409 Conflict` (`CONFLICT`)
-- `500 Internal Server Error` (`INTERNAL_SERVER_ERROR`)
+When a project is deleted via `DELETE /api/projects/:id`, all tasks referencing that project (`Task.projectId`) are automatically deleted from MongoDB. This prevents orphaned tasks and maintains database integrity.
 
 ---
 
-## 📖 Complete API Endpoint Reference & cURL Examples
+## 🌐 Live Production Deployment
 
-> **Note**: All JSON response payloads shown below represent example response data returned by the API.
+The backend API is deployed live on **Render**:
 
-### 1. 📊 Dashboard Analytics (`/api/dashboard`)
-
-#### **GET** `/api/dashboard/summary`
-Returns aggregate project/task metrics and next deadline.
-- **cURL Request:**
-  ```bash
-  curl http://localhost:5000/api/dashboard/summary
-  ```
-- **Example Response (200 OK):**
-  ```json
-  {
-    "success": true,
-    "data": {
-      "totalProjects": 4,
-      "totalTasks": 7,
-      "completedTasks": 3,
-      "pendingTasks": 4,
-      "upcomingDeadlinesCount": 3,
-      "nextDeadlineDate": "2026-09-20T00:00:00.000Z"
-    }
-  }
-  ```
-
-#### **GET** `/api/dashboard/velocity`
-Computes weekly sprint velocity (% change in completed tasks) and overall completion percentage.
-- **cURL Request:**
-  ```bash
-  curl http://localhost:5000/api/dashboard/velocity
-  ```
-- **Example Response (200 OK):**
-  ```json
-  {
-    "success": true,
-    "data": {
-      "completedThisWeek": 2,
-      "completedLastWeek": 1,
-      "sprintVelocity": 100,
-      "overallCompletionPercent": 43
-    }
-  }
-  ```
-
-#### **GET** `/api/dashboard/activity`
-Returns paginated recent activity logs (created tasks, completed tasks, status changes).
-- **Query Parameters:** `page` (default 1), `limit` (default 10)
-- **cURL Request:**
-  ```bash
-  curl "http://localhost:5000/api/dashboard/activity?page=1&limit=5"
-  ```
-- **Example Response (200 OK):**
-  ```json
-  {
-    "success": true,
-    "data": [
-      {
-        "id": "act-1",
-        "type": "task_completed",
-        "title": "Task Completed: Figma Wireframes & User Flows",
-        "description": "Alex Rivera marked \"Figma Wireframes & User Flows\" as completed.",
-        "projectId": "proj-2",
-        "timestamp": "2026-09-11T16:00:00.000Z"
-      }
-    ],
-    "meta": {
-      "page": 1,
-      "limit": 5,
-      "totalItems": 5,
-      "totalPages": 1
-    }
-  }
-  ```
-
-#### **GET** `/api/dashboard/insight`
-Returns rule-based productivity tip string derived from completion rate and velocity.
-- **cURL Request:**
-  ```bash
-  curl http://localhost:5000/api/dashboard/insight
-  ```
-- **Example Response (200 OK):**
-  ```json
-  {
-    "success": true,
-    "data": {
-      "insight": "Great momentum! Task completion rate increased by 100% compared to last week.",
-      "metrics": {
-        "completionRate": 43,
-        "sprintVelocity": 100
-      }
-    }
-  }
-  ```
+- **Live API Base URL**: [https://devpulse-backend-jbzu.onrender.com](https://devpulse-backend-jbzu.onrender.com/)
+- **Health Check Endpoint**: [https://devpulse-backend-jbzu.onrender.com/api/health](https://devpulse-backend-jbzu.onrender.com/api/health)
 
 ---
 
-### 2. 📁 Projects API (`/api/projects`)
+## 🧪 Verification & Testing
 
-#### **GET** `/api/projects`
-List all projects with filtering and sorting support.
-- **Query Parameters:**
-  - `status`: `planning` | `in_progress` | `completed` | `on_hold` (hyphenated e.g. `in-progress` normalized automatically)
-  - `sort`: `recent` (default) | `progress` | `dueDate` | `name`
-- **cURL Request:**
-  ```bash
-  curl "http://localhost:5000/api/projects?status=in_progress&sort=progress"
-  ```
-- **Example Response (200 OK):**
-  ```json
-  {
-    "success": true,
-    "data": [
-      {
-        "id": "proj-1",
-        "name": "E-Commerce Microservices",
-        "description": "Migrating monolithic store to distributed Express microservices architecture",
-        "status": "in_progress",
-        "progress": 65,
-        "dueDate": "2026-10-15T00:00:00.000Z",
-        "createdAt": "2026-08-01T09:00:00.000Z",
-        "updatedAt": "2026-09-14T11:20:00.000Z"
-      }
-    ],
-    "meta": {
-      "total": 1
-    }
-  }
-  ```
+The Task 3 implementation was verified through automated tests:
 
-#### **GET** `/api/projects/:id`
-Get single project detail.
-- **cURL Request:**
-  ```bash
-  curl http://localhost:5000/api/projects/proj-1
-  ```
-- **Example Response (200 OK):**
-  ```json
-  {
-    "success": true,
-    "data": {
-      "id": "proj-1",
-      "name": "E-Commerce Microservices",
-      "description": "Migrating monolithic store to distributed Express microservices architecture",
-      "status": "in_progress",
-      "progress": 65,
-      "dueDate": "2026-10-15T00:00:00.000Z",
-      "createdAt": "2026-08-01T09:00:00.000Z",
-      "updatedAt": "2026-09-14T11:20:00.000Z"
-    }
-  }
-  ```
-
-#### **POST** `/api/projects`
-Create a new project.
-- **cURL Request:**
-  ```bash
-  curl -X POST http://localhost:5000/api/projects \
-    -H "Content-Type: application/json" \
-    -d '{
-      "name": "DevPulse Analytics Pipeline",
-      "description": "Real-time metrics aggregator service",
-      "status": "planning",
-      "progress": 0,
-      "dueDate": "2026-12-31T00:00:00.000Z"
-    }'
-  ```
-- **Example Response (201 Created):**
-  ```json
-  {
-    "success": true,
-    "data": {
-      "id": "proj-5",
-      "name": "DevPulse Analytics Pipeline",
-      "description": "Real-time metrics aggregator service",
-      "status": "planning",
-      "progress": 0,
-      "dueDate": "2026-12-31T00:00:00.000Z",
-      "createdAt": "2026-09-15T00:15:00.000Z",
-      "updatedAt": "2026-09-15T00:15:00.000Z"
-    }
-  }
-  ```
-
-#### **PUT / PATCH** `/api/projects/:id`
-Update an existing project.
-- **cURL Request:**
-  ```bash
-  curl -X PATCH http://localhost:5000/api/projects/proj-1 \
-    -H "Content-Type: application/json" \
-    -d '{
-      "status": "in_progress",
-      "progress": 75
-    }'
-  ```
-- **Example Response (200 OK):**
-  ```json
-  {
-    "success": true,
-    "data": {
-      "id": "proj-1",
-      "name": "E-Commerce Microservices",
-      "description": "Migrating monolithic store to distributed Express microservices architecture",
-      "status": "in_progress",
-      "progress": 75,
-      "dueDate": "2026-10-15T00:00:00.000Z",
-      "createdAt": "2026-08-01T09:00:00.000Z",
-      "updatedAt": "2026-09-15T00:16:00.000Z"
-    }
-  }
-  ```
-
-#### **DELETE** `/api/projects/:id`
-Delete a project and its associated tasks.
-- **cURL Request:**
-  ```bash
-  curl -X DELETE http://localhost:5000/api/projects/proj-5
-  ```
-- **Example Response (204 No Content)**
+1. **Health Check**: Verified `GET /api/health` returns HTTP 200 `online`.
+2. **User CRUD**: Verified user creation, reading, updating, and deletion.
+3. **Project CRUD**: Verified project creation, status updates, progress recalculations, and deletion.
+4. **Task CRUD**: Verified task creation, Kanban grouping, status updates, and `completedAt` timestamp automation.
+5. **MongoDB Persistence**: Verified created projects and tasks persist across server restarts.
+6. **Task → Project Relationship**: Verified invalid `projectId` rejection and `?populate=project` fetching.
+7. **Cascade Deletion**: Verified deleting a project removes all referencing tasks.
+8. **Dashboard Analytics**: Verified summary, velocity, activity logs, and insight metrics reflect database state.
 
 ---
 
-### 3. 📋 Tasks API (`/api/tasks`)
+## 🔒 Security
 
-#### **GET** `/api/tasks`
-List tasks with optional project, status, priority filters, and Kanban board grouping.
-- **Query Parameters:**
-  - `projectId`: filter by project ID
-  - `status`: `todo` | `in_progress` | `done`
-  - `priority`: `low` | `medium` | `high`
-  - `sort`: `dueDate` (default) | `recent`
-  - `view`: `kanban` (returns tasks grouped by columns `{ todo, in_progress, done }`)
-- **cURL Request (Standard List):**
-  ```bash
-  curl "http://localhost:5000/api/tasks?projectId=proj-1&status=in_progress"
-  ```
-- **cURL Request (Kanban View):**
-  ```bash
-  curl "http://localhost:5000/api/tasks?view=kanban"
-  ```
-- **Example Response (Kanban View 200 OK):**
-  ```json
-  {
-    "success": true,
-    "data": {
-      "todo": [
-        {
-          "id": "task-3",
-          "projectId": "proj-1",
-          "title": "Write Integration Tests for Payment Gateway",
-          "status": "todo",
-          "priority": "medium",
-          "dueDate": "2026-09-25T00:00:00.000Z"
-        }
-      ],
-      "in_progress": [
-        {
-          "id": "task-2",
-          "projectId": "proj-1",
-          "title": "Implement Rate Limiter Middleware",
-          "status": "in_progress",
-          "priority": "high",
-          "dueDate": "2026-09-20T00:00:00.000Z"
-        }
-      ],
-      "done": [
-        {
-          "id": "task-1",
-          "projectId": "proj-1",
-          "title": "Design Auth Service Schema",
-          "status": "done",
-          "priority": "high",
-          "dueDate": "2026-09-10T00:00:00.000Z",
-          "completedAt": "2026-09-09T14:30:00.000Z"
-        }
-      ]
-    },
-    "meta": {
-      "total": 7
-    }
-  }
-  ```
-
-#### **POST** `/api/tasks`
-Create a new task under a valid project.
-- **cURL Request:**
-  ```bash
-  curl -X POST http://localhost:5000/api/tasks \
-    -H "Content-Type: application/json" \
-    -d '{
-      "projectId": "proj-1",
-      "title": "Setup Prometheus Metrics Exporter",
-      "description": "Expose HTTP latency histograms",
-      "status": "todo",
-      "priority": "high",
-      "dueDate": "2026-09-30T00:00:00.000Z"
-    }'
-  ```
-- **Example Response (201 Created):**
-  ```json
-  {
-    "success": true,
-    "data": {
-      "id": "task-8",
-      "projectId": "proj-1",
-      "title": "Setup Prometheus Metrics Exporter",
-      "description": "Expose HTTP latency histograms",
-      "status": "todo",
-      "priority": "high",
-      "dueDate": "2026-09-30T00:00:00.000Z",
-      "createdAt": "2026-09-15T00:17:00.000Z",
-      "updatedAt": "2026-09-15T00:17:00.000Z",
-      "completedAt": null
-    }
-  }
-  ```
-
-#### **PUT / PATCH** `/api/tasks/:id`
-Update task details or status. Setting `status: "done"` automatically populates `completedAt`.
-- **cURL Request:**
-  ```bash
-  curl -X PATCH http://localhost:5000/api/tasks/task-2 \
-    -H "Content-Type: application/json" \
-    -d '{
-      "status": "done"
-    }'
-  ```
-- **Example Response (200 OK):**
-  ```json
-  {
-    "success": true,
-    "data": {
-      "id": "task-2",
-      "projectId": "proj-1",
-      "title": "Implement Rate Limiter Middleware",
-      "description": "Add Redis sliding window rate limiting to API gateway",
-      "status": "done",
-      "priority": "high",
-      "dueDate": "2026-09-20T00:00:00.000Z",
-      "createdAt": "2026-09-02T11:15:00.000Z",
-      "updatedAt": "2026-09-15T00:18:00.000Z",
-      "completedAt": "2026-09-15T00:18:00.000Z"
-    }
-  }
-  ```
-
-#### **DELETE** `/api/tasks/:id`
-Delete a task.
-- **cURL Request:**
-  ```bash
-  curl -X DELETE http://localhost:5000/api/tasks/task-8
-  ```
-- **Example Response (204 No Content)**
+- Sensitive credentials and connection strings are stored exclusively in environment variables (`.env`).
+- `.env` is strictly excluded via `.gitignore`.
+- `.env.example` contains safe placeholder values only.
+- Real credentials and database URIs are never committed to GitHub.
 
 ---
 
-### 4. 👤 Users / Profile API (`/api/users`)
+## 🔗 Repository & Task 3 Deliverables
 
-#### **GET** `/api/users/profile`
-Retrieve user profile and active UI settings.
-- **cURL Request:**
-  ```bash
-  curl http://localhost:5000/api/users/profile
-  ```
-- **Example Response (200 OK):**
-  ```json
-  {
-    "success": true,
-    "data": {
-      "id": "user-1",
-      "name": "Alex Rivera",
-      "email": "alex.rivera@devpulse.io",
-      "avatarInitials": "AR",
-      "theme": "sunset-rose",
-      "sidebarCollapsed": false,
-      "createdAt": "2026-01-15T08:00:00.000Z",
-      "updatedAt": "2026-09-01T10:30:00.000Z"
-    }
-  }
-  ```
-
-#### **PUT / PATCH** `/api/users/profile`
-Update user profile and theme/sidebar preferences.
-- **cURL Request:**
-  ```bash
-  curl -X PATCH http://localhost:5000/api/users/profile \
-    -H "Content-Type: application/json" \
-    -d '{
-      "theme": "emerald-dark",
-      "sidebarCollapsed": true
-    }'
-  ```
-- **Example Response (200 OK):**
-  ```json
-  {
-    "success": true,
-    "data": {
-      "id": "user-1",
-      "name": "Alex Rivera",
-      "email": "alex.rivera@devpulse.io",
-      "avatarInitials": "AR",
-      "theme": "emerald-dark",
-      "sidebarCollapsed": true,
-      "createdAt": "2026-01-15T08:00:00.000Z",
-      "updatedAt": "2026-09-15T00:19:00.000Z"
-    }
-  }
-  ```
-
----
-
-## 🧪 Testing
-
-Run the automated verification test suite:
-```bash
-node scratch/verify_api.js
-```
-The test suite verifies:
-- Health check status
-- User CRUD & profile update
-- Projects CRUD, status filtering, and sorting
-- Tasks CRUD, Kanban view generation, status update `completedAt` automation
-- Zod schema input validation (rejecting malformed status enums)
-- 404 and 500 error handling
-- Dashboard aggregate calculations (`summary`, `velocity`, `activity`, `insight`)
+- **GitHub Repository**: [https://github.com/Akashhh8826/devpulse-backend](https://github.com/Akashhh8826/devpulse-backend)
+- **Live Production API**: [https://devpulse-backend-jbzu.onrender.com](https://devpulse-backend-jbzu.onrender.com/)
+- **Demo Video**: [Add link]
+- **LinkedIn Post**: [Add link]
