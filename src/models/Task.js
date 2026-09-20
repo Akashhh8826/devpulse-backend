@@ -2,14 +2,21 @@ const mongoose = require('mongoose');
 
 const taskSchema = new mongoose.Schema(
   {
-    _id: {
+    id: {
       type: String,
       required: true,
+      unique: true,
+      index: true,
     },
     projectId: {
-      type: String,
+      type: mongoose.Schema.Types.ObjectId,
       ref: 'Project',
-      required: [true, 'Task must belong to a valid Project (projectId is required)'],
+      required: [true, 'Task must reference a valid Project'],
+    },
+    projectPublicId: {
+      type: String,
+      required: true,
+      index: true,
     },
     title: {
       type: String,
@@ -49,7 +56,13 @@ const taskSchema = new mongoose.Schema(
     timestamps: true,
     toJSON: {
       transform: (doc, ret) => {
-        ret.id = ret._id;
+        if (ret.projectId && typeof ret.projectId === 'object' && ret.projectId.id) {
+          ret.project = ret.projectId;
+          ret.projectId = ret.projectPublicId || ret.projectId.id;
+        } else {
+          ret.projectId = ret.projectPublicId || ret.projectId;
+        }
+        delete ret.projectPublicId;
         delete ret._id;
         delete ret.__v;
         return ret;
@@ -57,7 +70,13 @@ const taskSchema = new mongoose.Schema(
     },
     toObject: {
       transform: (doc, ret) => {
-        ret.id = ret._id;
+        if (ret.projectId && typeof ret.projectId === 'object' && ret.projectId.id) {
+          ret.project = ret.projectId;
+          ret.projectId = ret.projectPublicId || ret.projectId.id;
+        } else {
+          ret.projectId = ret.projectPublicId || ret.projectId;
+        }
+        delete ret.projectPublicId;
         delete ret._id;
         delete ret.__v;
         return ret;

@@ -2,9 +2,11 @@ const mongoose = require('mongoose');
 
 const userSchema = new mongoose.Schema(
   {
-    _id: {
+    id: {
       type: String,
       required: true,
+      unique: true,
+      index: true,
     },
     name: {
       type: String,
@@ -35,7 +37,6 @@ const userSchema = new mongoose.Schema(
     timestamps: true,
     toJSON: {
       transform: (doc, ret) => {
-        ret.id = ret._id;
         delete ret._id;
         delete ret.__v;
         return ret;
@@ -43,7 +44,6 @@ const userSchema = new mongoose.Schema(
     },
     toObject: {
       transform: (doc, ret) => {
-        ret.id = ret._id;
         delete ret._id;
         delete ret.__v;
         return ret;

@@ -121,36 +121,54 @@
 
 ---
 
-## 🗄️ Database Setup (Task 3: MongoDB & Mongoose Integration)
+## 🗄️ Database Setup
 
-DevPulse REST API Backend uses **MongoDB** with **Mongoose** for reliable data persistence.
+DevPulse REST API Backend uses **MongoDB** with **Mongoose** for persistent data storage.
 
-### 1. Prerequisites & Environment Variables
-Specify your MongoDB connection string in `.env` (refer to `.env.example`):
+### Local MongoDB
+To run MongoDB locally on port 27017, set `MONGODB_URI` in your `.env` file:
 ```env
-PORT=5000
-NODE_ENV=development
-CORS_ORIGIN=*
 MONGODB_URI=mongodb://localhost:27017/devpulse
 ```
 
-*For MongoDB Atlas Cloud:*
+### MongoDB Atlas Cloud Setup
+To connect to MongoDB Atlas cloud database:
+1. Create a free cluster on [MongoDB Atlas](https://www.mongodb.com/cloud/atlas).
+2. Create a database user with read/write credentials.
+3. Add your current IP address (or `0.0.0.0/0` for cloud deployment) to Network Access IP Access List.
+4. Copy the application connection string format.
+5. Add the URI to your `.env` file:
 ```env
 MONGODB_URI=mongodb+srv://<username>:<password>@cluster0.mongodb.net/devpulse?retryWrites=true&w=majority
 ```
 
-### 2. Database Seeding (`npm run seed`)
-Populate the database with initial sample users, projects, tasks, and activity logs:
+### Seed Database
+Populate the database with realistic sample data:
 ```bash
 npm run seed
 ```
 
-### 3. Task 3 Architectural Enhancements
-- **Persistent Store**: In-memory data store replaced with Mongoose queries (`User`, `Project`, `Task`, `Activity`).
-- **Schema Validation**: Schema-level constraints for enums (`planning`, `in_progress`, `completed`, `on_hold` for Projects; `todo`, `in_progress`, `done` for Tasks; `low`, `medium`, `high` for Priority), range checks (`progress`: 0-100), required fields, and timestamps.
-- **Relationship Modeling & Population**: `Task.projectId` references `Project`. Supports `?populate=project` query param and `GET /api/tasks/:id/full`.
-- **Cascade Deletion Policy**: Deleting a `Project` automatically cleans up all associated `Task` documents.
-- **Persistent Analytics**: `/api/dashboard/*` analytics endpoints execute live database queries.
+### Start Development Server
+Start the Express server in auto-reloading development mode:
+```bash
+npm run dev
+```
+
+> **Project Deletion Policy**: Deleting a project also deletes all tasks associated with that project.
+
+---
+
+## 🔄 Task 2 → Task 3 Evolution
+
+| Capability | Task 2 (In-Memory REST API) | Task 3 (MongoDB + Mongoose Integration) |
+| :--- | :--- | :--- |
+| **Data Persistence** | Transient Node.js memory arrays | Persistent MongoDB database collections |
+| **Data Modeling** | Plain JavaScript objects | Strict Mongoose Schemas (`User`, `Project`, `Task`, `Activity`) |
+| **Relationships** | Manual array filtering | Mongoose `ObjectId` `ref: 'Project'` relationship & population |
+| **Project Deletion** | Array item filtering | **Cascade Deletion** (deleting a project also deletes all associated tasks) |
+| **Analytics** | In-memory array math | Persistent database queries and aggregation pipelines |
+| **Seeding** | Memory array instantiation | Dedicated seed script (`npm run seed`) |
+| **Configuration** | Static port config | Environment variable driven (`MONGODB_URI`, `PORT`, `NODE_ENV`) |
 
 ### 🔗 Architectural Note: Week 1 Frontend Alignment
 - **Frontend Contract Compatibility**: Serves the Week 1 DevPulse frontend ([https://akashhh8826.github.io/developer-productivity-dashboard/](https://akashhh8826.github.io/developer-productivity-dashboard/)) with zero breaking changes to JSON key naming or endpoint signatures.

@@ -2,9 +2,11 @@ const mongoose = require('mongoose');
 
 const activitySchema = new mongoose.Schema(
   {
-    _id: {
+    id: {
       type: String,
       required: true,
+      unique: true,
+      index: true,
     },
     type: {
       type: String,
@@ -20,7 +22,6 @@ const activitySchema = new mongoose.Schema(
     },
     projectId: {
       type: String,
-      ref: 'Project',
       default: null,
     },
     timestamp: {
@@ -32,7 +33,6 @@ const activitySchema = new mongoose.Schema(
     timestamps: true,
     toJSON: {
       transform: (doc, ret) => {
-        ret.id = ret._id;
         delete ret._id;
         delete ret.__v;
         return ret;
@@ -40,7 +40,6 @@ const activitySchema = new mongoose.Schema(
     },
     toObject: {
       transform: (doc, ret) => {
-        ret.id = ret._id;
         delete ret._id;
         delete ret.__v;
         return ret;

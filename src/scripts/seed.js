@@ -1,6 +1,6 @@
 require('dotenv').config();
 const mongoose = require('mongoose');
-const connectDB = require('../config/db');
+const connectDB = require('../config/database');
 const User = require('../models/User');
 const Project = require('../models/Project');
 const Task = require('../models/Task');
@@ -24,17 +24,28 @@ async function seed() {
     await Activity.deleteMany({});
     console.log('🧹 Cleared existing database collections.');
 
-    // Prepare documents with _id matching seed IDs
-    const usersToInsert = initialUsers.map((u) => ({ ...u, _id: u.id }));
-    const projectsToInsert = initialProjects.map((p) => ({ ...p, _id: p.id }));
-    const tasksToInsert = initialTasks.map((t) => ({ ...t, _id: t.id }));
-    const activitiesToInsert = initialActivityLogs.map((a) => ({ ...a, _id: a.id }));
+    // 1. Insert Users
+    const insertedUsers = await User.insertMany(initialUsers);
 
-    // Insert records
-    const insertedUsers = await User.insertMany(usersToInsert);
-    const insertedProjects = await Project.insertMany(projectsToInsert);
+    // 2. Insert Projects
+    const insertedProjects = await Project.insertMany(initialProjects);
+
+    // Map public string id (e.g. 'proj-1') to Mongoose _id (ObjectId)
+    const projectMap = {};
+    for (const proj of insertedProjects) {
+      projectMap[proj.id] = proj._id;
+    }
+
+    // 3. Insert Tasks referencing Project ObjectIds
+    const tasksToInsert = initialTasks.map((t) => ({
+      ...t,
+      projectId: projectMap[t.projectId],
+      projectPublicId: t.projectId,
+    }));
     const insertedTasks = await Task.insertMany(tasksToInsert);
-    const insertedActivities = await Activity.insertMany(activitiesToInsert);
+
+    // 4. Insert Activity Logs
+    const insertedActivities = await Activity.insertMany(initialActivityLogs);
 
     console.log(`✅ Seeded ${insertedUsers.length} Users.`);
     console.log(`✅ Seeded ${insertedProjects.length} Projects.`);
@@ -42,6 +53,7 @@ async function seed() {
     console.log(`✅ Seeded ${insertedActivities.length} Activity Logs.`);
     console.log('🎉 Database seeding completed successfully!');
 
+    await mongoose.disconnect();
     process.exit(0);
   } catch (error) {
     console.error('❌ Error seeding database:', error);

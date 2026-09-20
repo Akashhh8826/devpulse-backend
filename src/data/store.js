@@ -6,9 +6,10 @@ const Activity = require('../models/Activity');
 class DataStore {
   // --- LOG ACTIVITY ---
   async addActivityLog(type, title, description, projectId = null) {
-    const id = `act-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    const count = await Activity.countDocuments();
+    const id = `act-${count + 1}-${Date.now()}`;
     const log = await Activity.create({
-      _id: id,
+      id,
       type,
       title,
       description,
@@ -19,13 +20,13 @@ class DataStore {
   }
 
   // --- PROJECT PROGRESS HELPER ---
-  async recalculateProjectProgress(projectId) {
-    if (!projectId) return;
+  async recalculateProjectProgress(projectPublicId) {
+    if (!projectPublicId) return;
 
-    const project = await Project.findById(projectId);
+    const project = await Project.findOne({ id: projectPublicId });
     if (!project) return;
 
-    const projectTasks = await Task.find({ projectId });
+    const projectTasks = await Task.find({ projectId: project._id });
     if (projectTasks.length === 0) return;
 
     const completedCount = projectTasks.filter((t) => t.status === 'done').length;
@@ -42,7 +43,7 @@ class DataStore {
   }
 
   async findUserById(id) {
-    const user = await User.findById(id);
+    const user = await User.findOne({ id });
     return user ? user.toJSON() : null;
   }
 
@@ -61,7 +62,7 @@ class DataStore {
         : 'UR');
 
     const newUser = await User.create({
-      _id: id,
+      id,
       name: userData.name,
       email: userData.email,
       avatarInitials,
@@ -73,7 +74,7 @@ class DataStore {
   }
 
   async updateUser(id, updates) {
-    const user = await User.findByIdAndUpdate(id, updates, {
+    const user = await User.findOneAndUpdate({ id }, updates, {
       new: true,
       runValidators: true,
     });
@@ -81,7 +82,7 @@ class DataStore {
   }
 
   async deleteUser(id) {
-    const user = await User.findByIdAndDelete(id);
+    const user = await User.findOneAndDelete({ id });
     return !!user;
   }
 
@@ -116,7 +117,7 @@ class DataStore {
   }
 
   async findProjectById(id) {
-    const project = await Project.findById(id);
+    const project = await Project.findOne({ id });
     return project ? project.toJSON() : null;
   }
 
@@ -125,7 +126,7 @@ class DataStore {
     const id = projectData.id || `proj-${count + 1}-${Date.now()}`;
 
     const newProject = await Project.create({
-      _id: id,
+      id,
       name: projectData.name,
       description: projectData.description || '',
       status: projectData.status || 'planning',
@@ -137,14 +138,14 @@ class DataStore {
       'project_created',
       `Project Created: ${newProject.name}`,
       `New project "${newProject.name}" was created.`,
-      newProject._id
+      newProject.id
     );
 
     return newProject.toJSON();
   }
 
   async updateProject(id, updates) {
-    const project = await Project.findById(id);
+    const project = await Project.findOne({ id });
     if (!project) return null;
 
     const oldStatus = project.status;
@@ -156,7 +157,7 @@ class DataStore {
         'project_status_changed',
         `Project Status Updated: ${project.name}`,
         `Status changed from ${oldStatus} to ${project.status}.`,
-        project._id
+        project.id
       );
     }
 
@@ -164,11 +165,15 @@ class DataStore {
   }
 
   async deleteProject(id) {
-    const project = await Project.findByIdAndDelete(id);
+    const project = await Project.findOne({ id });
     if (!project) return false;
 
-    // Cascade delete associated tasks
-    await Task.deleteMany({ projectId: id });
+    // Cascade delete associated tasks referencing project's _id or public id
+    await Task.deleteMany({
+      $or: [{ projectId: project._id }, { projectPublicId: id }],
+    });
+
+    await Project.deleteOne({ _id: project._id });
 
     await this.addActivityLog(
       'project_deleted',
@@ -186,7 +191,12 @@ class DataStore {
     const filter = {};
 
     if (projectId) {
-      filter.projectId = projectId;
+      const project = await Project.findOne({ id: projectId });
+      if (project) {
+        filter.projectId = project._id;
+      } else {
+        filter.projectPublicId = projectId;
+      }
     }
     if (status) {
       filter.status = status.replace(/-/g, '_');
@@ -207,42 +217,34 @@ class DataStore {
     }
 
     const tasks = await query;
-    return tasks.map((t) => {
-      const json = t.toJSON();
-      if (populate && t.projectId && typeof t.projectId === 'object' && t.projectId.name) {
-        json.project = t.projectId.toJSON ? t.projectId.toJSON() : t.projectId;
-        json.projectId = t.projectId._id || t.projectId.id;
-      }
-      return json;
-    });
+    return tasks.map((t) => t.toJSON());
   }
 
   async findTaskById(id, { populate } = {}) {
-    let query = Task.findById(id);
+    let query = Task.findOne({ id });
     if (populate === 'project' || populate === true || populate === 'true') {
       query = query.populate('projectId');
     }
 
     const task = await query;
-    if (!task) return null;
-
-    const json = task.toJSON();
-    if (populate && task.projectId && typeof task.projectId === 'object' && task.projectId.name) {
-      json.project = task.projectId.toJSON ? task.projectId.toJSON() : task.projectId;
-      json.projectId = task.projectId._id || task.projectId.id;
-    }
-    return json;
+    return task ? task.toJSON() : null;
   }
 
   async createTask(taskData) {
+    const project = await Project.findOne({ id: taskData.projectId });
+    if (!project) {
+      return null;
+    }
+
     const count = await Task.countDocuments();
     const id = taskData.id || `task-${count + 1}-${Date.now()}`;
     const isDone = taskData.status === 'done';
     const completedAt = isDone ? new Date() : null;
 
     const newTask = await Task.create({
-      _id: id,
-      projectId: taskData.projectId,
+      id,
+      projectId: project._id,
+      projectPublicId: project.id,
       title: taskData.title,
       description: taskData.description || '',
       status: taskData.status || 'todo',
@@ -251,24 +253,32 @@ class DataStore {
       completedAt,
     });
 
-    await this.recalculateProjectProgress(newTask.projectId);
+    await this.recalculateProjectProgress(project.id);
 
     await this.addActivityLog(
       'task_created',
       `Task Created: ${newTask.title}`,
       `New task added under project.`,
-      newTask.projectId
+      project.id
     );
 
     return newTask.toJSON();
   }
 
   async updateTask(id, updates) {
-    const task = await Task.findById(id);
+    const task = await Task.findOne({ id });
     if (!task) return null;
 
     const oldStatus = task.status;
     let completedAt = task.completedAt;
+
+    if (updates.projectId) {
+      const project = await Project.findOne({ id: updates.projectId });
+      if (project) {
+        task.projectId = project._id;
+        task.projectPublicId = project.id;
+      }
+    }
 
     if (updates.status) {
       if (updates.status === 'done' && oldStatus !== 'done') {
@@ -282,14 +292,14 @@ class DataStore {
     task.completedAt = completedAt;
     await task.save();
 
-    await this.recalculateProjectProgress(task.projectId);
+    await this.recalculateProjectProgress(task.projectPublicId);
 
     if (updates.status === 'done' && oldStatus !== 'done') {
       await this.addActivityLog(
         'task_completed',
         `Task Completed: ${task.title}`,
         `Task "${task.title}" marked as completed.`,
-        task.projectId
+        task.projectPublicId
       );
     }
 
@@ -297,10 +307,10 @@ class DataStore {
   }
 
   async deleteTask(id) {
-    const task = await Task.findByIdAndDelete(id);
+    const task = await Task.findOneAndDelete({ id });
     if (!task) return false;
 
-    await this.recalculateProjectProgress(task.projectId);
+    await this.recalculateProjectProgress(task.projectPublicId);
     return true;
   }
 
