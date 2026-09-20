@@ -302,5 +302,3 @@ The Task 3 implementation was verified through automated tests:
 
 - **GitHub Repository**: [https://github.com/Akashhh8826/devpulse-backend](https://github.com/Akashhh8826/devpulse-backend)
 - **Live Production API**: [https://devpulse-backend-jbzu.onrender.com](https://devpulse-backend-jbzu.onrender.com/)
-- **Demo Video**: [Add link]
-- **LinkedIn Post**: [Add link]
