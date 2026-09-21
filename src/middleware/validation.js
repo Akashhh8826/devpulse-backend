@@ -57,6 +57,34 @@ const createUserSchema = z.object({
 
 const updateUserSchema = createUserSchema.partial();
 
+// Auth Validation Schemas
+const registerSchema = z.object({
+  name: z.string({ required_error: 'User name is required' }).min(1, 'User name cannot be empty'),
+  email: z.string({ required_error: 'Email is required' }).email('Invalid email address format'),
+  password: z.string({ required_error: 'Password is required' }).min(6, 'Password must be at least 6 characters'),
+});
+
+const loginSchema = z.object({
+  email: z.string({ required_error: 'Email is required' }).email('Invalid email address format'),
+  password: z.string({ required_error: 'Password is required' }).min(1, 'Password cannot be empty'),
+});
+
+// AI Validation Schemas
+const aiSuggestSchema = z.object({
+  projectId: z.string({ required_error: 'projectId is required' }).min(1, 'projectId cannot be empty'),
+});
+
+const aiAcceptSchema = z.object({
+  projectId: z.string({ required_error: 'projectId is required' }).min(1, 'projectId cannot be empty'),
+  tasks: z.array(
+    z.object({
+      title: z.string({ required_error: 'Task title is required' }).min(1, 'Task title cannot be empty'),
+      priority: z.enum(['low', 'medium', 'high']).optional().default('medium'),
+      rationale: z.string().optional(),
+    })
+  ).min(1, 'At least one task must be provided'),
+});
+
 /**
  * Generic Validation Middleware Generator
  */
@@ -87,5 +115,9 @@ module.exports = {
     updateTask: updateTaskSchema,
     createUser: createUserSchema,
     updateUser: updateUserSchema,
+    register: registerSchema,
+    login: loginSchema,
+    aiSuggest: aiSuggestSchema,
+    aiAccept: aiAcceptSchema,
   },
 };

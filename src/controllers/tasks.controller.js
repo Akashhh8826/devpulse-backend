@@ -1,6 +1,6 @@
 const store = require('../data/store');
 const { sendSuccess, sendCreated, sendNoContent } = require('../utils/response');
-const { NotFoundError, BadRequestError } = require('../utils/errors');
+const { NotFoundError, BadRequestError, ForbiddenError } = require('../utils/errors');
 
 async function getAllTasks(req, res, next) {
   try {
@@ -56,9 +56,13 @@ async function getTaskFull(req, res, next) {
 async function createTask(req, res, next) {
   try {
     // Verify target project exists
-    const project = await store.findProjectById(req.body.projectId);
-    if (!project) {
+    const projectDoc = await store.findProjectDocById(req.body.projectId);
+    if (!projectDoc) {
       throw new BadRequestError(`Cannot create task: Project with ID '${req.body.projectId}' does not exist`);
+    }
+
+    if (projectDoc.ownerId && req.user && projectDoc.ownerId.toString() !== req.user._id.toString()) {
+      throw new ForbiddenError('You do not have permission to create tasks in this project');
     }
 
     const newTask = await store.createTask(req.body);
@@ -71,20 +75,22 @@ async function createTask(req, res, next) {
 async function updateTask(req, res, next) {
   try {
     const { id } = req.params;
-
-    if (req.body.projectId) {
-      const project = await store.findProjectById(req.body.projectId);
-      if (!project) {
-        throw new BadRequestError(`Cannot update task: Project with ID '${req.body.projectId}' does not exist`);
-      }
-    }
-
-    const updatedTask = await store.updateTask(id, req.body);
-
-    if (!updatedTask) {
+    const existingTask = await store.findTaskById(id);
+    if (!existingTask) {
       throw new NotFoundError(`Task with ID '${id}' not found`);
     }
 
+    const targetProjectPublicId = req.body.projectId || existingTask.projectId;
+    const projectDoc = await store.findProjectDocById(targetProjectPublicId);
+    if (!projectDoc) {
+      throw new BadRequestError(`Cannot update task: Project with ID '${targetProjectPublicId}' does not exist`);
+    }
+
+    if (projectDoc.ownerId && req.user && projectDoc.ownerId.toString() !== req.user._id.toString()) {
+      throw new ForbiddenError('You do not have permission to modify tasks in this project');
+    }
+
+    const updatedTask = await store.updateTask(id, req.body);
     return sendSuccess(res, updatedTask);
   } catch (err) {
     next(err);
@@ -94,12 +100,17 @@ async function updateTask(req, res, next) {
 async function deleteTask(req, res, next) {
   try {
     const { id } = req.params;
-    const deleted = await store.deleteTask(id);
-
-    if (!deleted) {
+    const existingTask = await store.findTaskById(id);
+    if (!existingTask) {
       throw new NotFoundError(`Task with ID '${id}' not found`);
     }
 
+    const projectDoc = await store.findProjectDocById(existingTask.projectId);
+    if (projectDoc && projectDoc.ownerId && req.user && projectDoc.ownerId.toString() !== req.user._id.toString()) {
+      throw new ForbiddenError('You do not have permission to delete tasks from this project');
+    }
+
+    await store.deleteTask(id);
     return sendNoContent(res);
   } catch (err) {
     next(err);

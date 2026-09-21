@@ -1,8 +1,8 @@
 # DevPulse REST API Backend
 
-> High-performance RESTful API backend for **DevPulse** — developer productivity dashboard and project/task management platform. 
+> High-performance RESTful API backend for **DevPulse** — developer productivity dashboard, project/task management platform, JWT authentication, and AI-powered task generation engine.
 
-Task 3 upgraded the DevPulse backend from Task 2's transient in-memory storage layer to persistent **MongoDB** database storage using **Mongoose**, preserving full backwards compatibility with all existing API contracts and the Week 1 frontend integration.
+Task 4 upgrades the DevPulse backend with full **JWT Authentication**, **Ownership Authorization**, protected write endpoints for Projects and Tasks, and **AI-Powered Task Generation** with structured JSON output, review/accept workflows, and an graceful 501 fallback mechanism.
 
 [![Deployment Status](https://img.shields.io/badge/Deployment-Live-success?style=for-the-badge&logo=render)](https://devpulse-backend-jbzu.onrender.com/api/health)
 [![GitHub Repository](https://img.shields.io/badge/GitHub-Repository-blue?style=for-the-badge&logo=github)](https://github.com/Akashhh8826/devpulse-backend)
@@ -11,19 +11,18 @@ Task 3 upgraded the DevPulse backend from Task 2's transient in-memory storage l
 
 ## ⚡ Features
 
+- **JWT Authentication**: Secure registration (`POST /api/auth/register`), login (`POST /api/auth/login`), current user profile (`GET /api/auth/me`), and stateless token logout (`POST /api/auth/logout`).
+- **Bcrypt Password Hashing**: Passwords are securely hashed with `bcryptjs` and hidden from all standard API outputs (`select: false`).
+- **Protected Write Operations**: Project & Task create, update, and delete endpoints require a valid `Authorization: Bearer <token>` header.
+- **Resource Ownership Authorization**: Projects belong to users (`ownerId`), and tasks inherit ownership through their project. Attempts by unauthorized users to modify or delete another user's projects or tasks yield HTTP `403 Forbidden`.
+- **AI-Powered Task Generation**: Generates 3–7 structured development task suggestions based on project name and description using Anthropic Claude (`POST /api/ai/suggest-tasks`).
+- **Structured JSON & AI Validation**: Strict validation of AI response output (`title`, `priority`, `rationale`). Malformed responses safely trigger HTTP `502 Bad Gateway`.
+- **AI Task Accept Flow**: User review/accept flow (`POST /api/ai/suggest-tasks/accept`) converts accepted suggestions directly into real MongoDB Task documents (`status: "todo"`).
+- **Graceful 501 AI Fallback**: If `ANTHROPIC_API_KEY` is unconfigured, the server starts normally and calls to `/api/ai/suggest-tasks` cleanly return HTTP `501 Not Implemented` (`AI_NOT_CONFIGURED`).
 - **User Management**: User profile and UI preferences (`theme`, `sidebarCollapsed`).
-- **Project Management**: Project tracking with status enums (`planning`, `in_progress`, `completed`, `on_hold`), progress tracking (0-100%), and due dates.
-- **Task Management**: Task tracking with Kanban board status (`todo`, `in_progress`, `done`), priority levels (`low`, `medium`, `high`), and auto-populated completion dates (`completedAt`).
-- **Full persistent CRUD**: Complete Create, Read, Update, Delete capabilities across all domain resources.
-- **MongoDB Persistent Storage**: Data survives server restarts and crashes.
-- **Mongoose Schemas & Models**: Strongly-typed object data modeling for User, Project, Task, and Activity.
-- **Schema-Level Validation**: Strict field constraints, enum restrictions, required parameters, and date checks.
-- **Project → Task Relationship**: Tasks explicitly reference Project documents via Mongoose `ObjectId` references.
-- **Cascading Deletion**: Deleting a project automatically deletes all associated tasks to prevent orphaned data.
-- **Persistent Dashboard Analytics**: Live computation of sprint velocity, completion rate, activity feeds, and rule-based productivity insights directly from MongoDB queries.
-- **Centralized Error Handling**: Standardized JSON error response format matching Zod and Mongoose validation errors.
-- **Environment-Driven Configuration**: Secure variable loading via `dotenv`.
-- **RESTful Endpoints**: Clean, standardized REST API routes with pagination and filtering support.
+- **Project & Task Management**: Status enums, progress tracking, Kanban views, and auto-populated completion timestamps.
+- **Cascading Deletion**: Deleting a project automatically deletes all associated tasks.
+- **Persistent Dashboard Analytics**: Live computation of sprint velocity, completion rate, activity feeds, and productivity insights directly from MongoDB.
 
 ---
 
@@ -33,10 +32,11 @@ Task 3 upgraded the DevPulse backend from Task 2's transient in-memory storage l
 - **Web Framework**: Express.js
 - **Database**: MongoDB / MongoDB Atlas
 - **Object Data Modeling (ODM)**: Mongoose
+- **Authentication**: JWT (`jsonwebtoken`) & `bcryptjs`
+- **AI Integration**: Anthropic SDK (`@anthropic-ai/sdk`) / Claude Models
 - **Input Validation**: Zod
 - **Environment Management**: `dotenv`
 - **CORS Management**: `cors` middleware
-- **Development Server Runner**: Node `--watch` / Nodemon
 
 ---
 
@@ -49,31 +49,38 @@ devpulse-backend/
 │   │   ├── database.js          # Primary MongoDB Mongoose connection module
 │   │   └── db.js                # Database connection export
 │   ├── controllers/
+│   │   ├── auth.controller.js     # Auth registration, login, profile, logout handlers
+│   │   ├── ai.controller.js       # AI task suggestion & accept handlers
 │   │   ├── dashboard.controller.js# Persistent analytics handlers
-│   │   ├── projects.controller.js # Project CRUD handlers
-│   │   ├── tasks.controller.js     # Task CRUD, Kanban, & populate handlers
+│   │   ├── projects.controller.js # Project CRUD & ownership handlers
+│   │   ├── tasks.controller.js     # Task CRUD, Kanban, & ownership handlers
 │   │   └── users.controller.js     # User CRUD & profile handlers
 │   ├── data/
 │   │   ├── seedData.js          # Seed dataset definitions
 │   │   └── store.js             # Mongoose Data Access Layer (DAL)
 │   ├── middleware/
+│   │   ├── auth.js              # JWT Bearer token authentication middleware
 │   │   ├── errorHandler.js      # Centralized JSON error handler
 │   │   ├── notFoundHandler.js   # 404 Not Found route handler
 │   │   └── validation.js        # Zod input validation schemas
 │   ├── models/
 │   │   ├── Activity.js          # Activity Mongoose schema
-│   │   ├── Project.js           # Project Mongoose schema
-│   │   ├── Task.js              # Task Mongoose schema (ref: Project)
-│   │   └── User.js              # User Mongoose schema
+│   │   ├── Project.js           # Project Mongoose schema (ownerId ref: User)
+│   │   ├── Task.js              # Task Mongoose schema (projectId ref: Project)
+│   │   └── User.js              # User Mongoose schema (passwordHash select: false)
 │   ├── routes/
+│   │   ├── auth.routes.js       # /api/auth routes
+│   │   ├── ai.routes.js         # /api/ai routes
 │   │   ├── dashboard.routes.js   # /api/dashboard/* routes
 │   │   ├── projects.routes.js    # /api/projects routes
 │   │   ├── tasks.routes.js       # /api/tasks routes
 │   │   └── users.routes.js       # /api/users routes
+│   ├── services/
+│   │   └── aiService.js         # LLM service & JSON response parser/validator
 │   ├── scripts/
 │   │   └── seed.js              # Independent database seed script
 │   ├── utils/
-│   │   ├── errors.js            # Custom AppError classes
+│   │   ├── errors.js            # Custom AppError classes (401, 403, 501, 502)
 │   │   └── response.js          # Standardized JSON response helpers
 │   ├── app.js                   # Express app setup & middleware mounting
 │   └── server.js                # HTTP server & database entry point
@@ -86,109 +93,50 @@ devpulse-backend/
 
 ## 🗄️ Database Design
 
-The database contains three main domain models (plus an audit `Activity` log model):
-
 ### 1. User (`src/models/User.js`)
-- `id`: String (Required, Unique public ID e.g. `user-1`)
-- `name`: String (Required, trimmed)
+- `id`: String (Required, Unique public ID)
+- `name`: String (Required)
 - `email`: String (Required, Unique, lowercase)
-- `avatarInitials`: String (Default: '')
-- `theme`: String (Default: 'sunset-rose')
-- `sidebarCollapsed`: Boolean (Default: false)
-- `createdAt` / `updatedAt`: Timestamps
+- `passwordHash`: String (`select: false`, hidden from JSON transforms)
+- `avatarInitials`: String
+- `theme` / `sidebarCollapsed`: Preference fields
 
 ### 2. Project (`src/models/Project.js`)
-- `id`: String (Required, Unique public ID e.g. `proj-1`)
-- `name`: String (Required, trimmed)
-- `description`: String (Default: '')
-- `status`: String (Enum: `['planning', 'in_progress', 'completed', 'on_hold']`, Default: 'planning')
-- `progress`: Number (Min: 0, Max: 100, Default: 0)
+- `id`: String (Required, Unique public ID)
+- `name`: String (Required)
+- `description`: String
+- `status`: String (Enum: `['planning', 'in_progress', 'completed', 'on_hold']`)
+- `progress`: Number (0-100)
 - `dueDate`: Date (Required)
-- `createdAt` / `updatedAt`: Timestamps
+- `ownerId`: Mongoose `ObjectId` (`ref: 'User'`)
 
 ### 3. Task (`src/models/Task.js`)
-- `id`: String (Required, Unique public ID e.g. `task-1`)
-- `projectId`: Mongoose `ObjectId` (Required, `ref: 'Project'`)
-- `projectPublicId`: String (Required, public project string ID e.g. `proj-1`)
-- `title`: String (Required, trimmed)
-- `description`: String (Default: '')
-- `status`: String (Enum: `['todo', 'in_progress', 'done']`, Default: 'todo')
-- `priority`: String (Enum: `['low', 'medium', 'high']`, Default: 'medium')
+- `id`: String (Required, Unique public ID)
+- `projectId`: Mongoose `ObjectId` (`ref: 'Project'`)
+- `projectPublicId`: String
+- `title`: String (Required)
+- `description`: String
+- `status`: String (Enum: `['todo', 'in_progress', 'done']`)
+- `priority`: String (Enum: `['low', 'medium', 'high']`)
 - `dueDate`: Date (Required)
-- `completedAt`: Date (Nullable, auto-populated when `status: 'done'`)
-- `createdAt` / `updatedAt`: Timestamps
-
-### Project → Task Relationship
-`Task.projectId` references the `Project` model via a proper Mongoose `ObjectId` reference, ensuring database-level relational integrity. In public API responses, `projectId` cleanly resolves to the project's public string ID (e.g. `proj-1`), and optional population (`?populate=project` or `GET /api/tasks/:id/full`) embeds the full Project object.
-
----
-
-## 💻 MongoDB Setup
-
-### 1. Local MongoDB
-Ensure a local MongoDB server is running on port `27017` and set your URI in `.env`:
-```env
-MONGODB_URI=mongodb://localhost:27017/devpulse
-```
-
-### 2. MongoDB Atlas Cloud
-To use MongoDB Atlas in cloud or staging environments:
-1. Create a free cluster at [MongoDB Atlas](https://www.mongodb.com/cloud/atlas).
-2. Create a database user with read/write privileges.
-3. Add your IP address to Network Access (`0.0.0.0/0` for cloud services like Render).
-4. Copy your cluster connection string and place it into `.env`:
-```env
-MONGODB_URI=mongodb+srv://<username>:<password>@cluster0.mongodb.net/devpulse?retryWrites=true&w=majority
-```
+- `completedAt`: Date
 
 ---
 
 ## 🌐 Environment Variables
 
-Environment variables are loaded via `dotenv`. Keep local credentials in `.env` (excluded by `.gitignore`). Use `.env.example` as a template:
+Variables are managed via `dotenv`. Template in `.env.example`:
 
 ```env
 PORT=5000
 NODE_ENV=development
 CORS_ORIGIN=*
 MONGODB_URI=mongodb://localhost:27017/devpulse
+
+JWT_SECRET=replace-with-a-long-random-secret
+
+ANTHROPIC_API_KEY=your-anthropic-api-key
 ```
-
----
-
-## 🚀 Installation & Running Locally
-
-1. **Clone the repository and install dependencies:**
-   ```bash
-   npm install
-   ```
-
-2. **Configure environment variables:**
-   ```bash
-   cp .env.example .env
-   ```
-
-3. **Start the development server:**
-   ```bash
-   npm run dev
-   ```
-
-4. **Start the production server:**
-   ```bash
-   npm start
-   ```
-
----
-
-## 🌱 Database Seeding
-
-To populate MongoDB with realistic initial sample users, projects, tasks, and activity logs:
-
-```bash
-npm run seed
-```
-
-This runs `node src/scripts/seed.js`, which connects to MongoDB, clears existing collections, inserts the seed dataset, and exits cleanly.
 
 ---
 
@@ -197,108 +145,87 @@ This runs `node src/scripts/seed.js`, which connects to MongoDB, clears existing
 ### Health Check
 - **`GET /api/health`**: Service availability & status
 
-### Users API (`/api/users`)
-- **`GET /api/users`**: List all users
-- **`POST /api/users`**: Create a new user
-- **`GET /api/users/:id`**: Get single user details
-- **`PUT /api/users/:id`** / **`PATCH /api/users/:id`**: Update user details
-- **`DELETE /api/users/:id`**: Delete user
-- **`GET /api/users/profile`**: Get current user profile (`user-1` default)
-- **`PUT /api/users/profile`** / **`PATCH /api/users/profile`**: Update current user profile
+### Authentication API (`/api/auth`)
+- **`POST /api/auth/register`**: Register a new user (`name`, `email`, `password`)
+- **`POST /api/auth/login`**: Authenticate user and receive JWT token
+- **`GET /api/auth/me`**: Get authenticated user profile (`Authorization: Bearer <token>`)
+- **`POST /api/auth/logout`**: Client-side stateless logout acknowledgement
+
+### AI Task Generation API (`/api/ai`) [Protected]
+- **`POST /api/ai/suggest-tasks`**: Generate 3–7 AI task suggestions for a project owned by user
+  - Header: `Authorization: Bearer <token>`
+  - Body: `{ "projectId": "proj-1" }`
+  - Response: Array of `{ title, priority, rationale }`
+- **`POST /api/ai/suggest-tasks/accept`**: Accept suggestions & create real MongoDB tasks
+  - Header: `Authorization: Bearer <token>`
+  - Body: `{ "projectId": "proj-1", "tasks": [...] }`
 
 ### Projects API (`/api/projects`)
-- **`GET /api/projects`**: List projects (supports `status` filter and `sort` param)
-- **`POST /api/projects`**: Create a new project
-- **`GET /api/projects/:id`**: Get project details
-- **`PUT /api/projects/:id`** / **`PATCH /api/projects/:id`**: Update project status or progress
-- **`DELETE /api/projects/:id`**: Delete project (triggers task cascade deletion)
+- **`GET /api/projects`**: List all projects (Public)
+- **`GET /api/projects/:id`**: Get project details (Public)
+- **`POST /api/projects`**: Create project [Protected - Auto-assigns `ownerId`]
+- **`PUT /api/projects/:id`** / **`PATCH /api/projects/:id`**: Update project [Protected - Owner check]
+- **`DELETE /api/projects/:id`**: Delete project [Protected - Owner check & cascade deletion]
 
 ### Tasks API (`/api/tasks`)
-- **`GET /api/tasks`**: List tasks (supports `projectId`, `status`, `priority`, `sort`, `view=kanban`, and `populate=project`)
-- **`POST /api/tasks`**: Create a new task under a valid project
-- **`GET /api/tasks/:id`**: Get task details (supports `?populate=project`)
-- **`GET /api/tasks/:id/full`**: Get task with fully populated project details
-- **`PUT /api/tasks/:id`** / **`PATCH /api/tasks/:id`**: Update task details or status
-- **`DELETE /api/tasks/:id`**: Delete task
-
-### Dashboard API (`/api/dashboard`)
-- **`GET /api/dashboard/summary`**: Persistent aggregate metrics (total projects, total tasks, completed, pending, next deadline)
-- **`GET /api/dashboard/velocity`**: Sprint velocity (% task completion change)
-- **`GET /api/dashboard/activity`**: Paginated recent activity log feed (`page`, `limit`)
-- **`GET /api/dashboard/insight`**: Dynamic productivity tips and metrics
+- **`GET /api/tasks`**: List tasks (Public, filter by `projectId`, `status`, `view=kanban`)
+- **`GET /api/tasks/:id`**: Get task details (Public)
+- **`POST /api/tasks`**: Create task [Protected - Project owner check]
+- **`PUT /api/tasks/:id`** / **`PATCH /api/tasks/:id`**: Update task [Protected - Project owner check]
+- **`DELETE /api/tasks/:id`**: Delete task [Protected - Project owner check]
 
 ---
 
-## 🛡️ Validation & Error Handling
+## 🤖 AI Workflow & Fallback Architecture
 
-- **Dual Validation**: Request payloads are validated at the middleware layer using Zod schemas and enforced at the database level using Mongoose schemas.
-- **Relational Integrity**: Attempting to create or update a task with a non-existent `projectId` is rejected with an HTTP `400 Bad Request` error:
-  ```json
-  {
-    "error": {
-      "message": "Cannot create task: Project with ID 'nonexistent-id' does not exist",
-      "code": "BAD_REQUEST"
-    }
-  }
-  ```
-
----
-
-## 🔄 Task 3 Database Integration (Task 2 vs Task 3)
-
-| Feature | Task 2 Backend | Task 3 Backend |
-| :--- | :--- | :--- |
-| **Data Storage** | In-memory JavaScript arrays | Persistent MongoDB database collections |
-| **Data Retention** | Data lost on server restart | Data survives server restarts and crashes |
-| **Data Models** | Plain JavaScript objects | Mongoose Schemas (`User`, `Project`, `Task`, `Activity`) |
-| **Relationships** | In-memory array filtering | Mongoose `ObjectId` `ref: 'Project'` relationship & population |
-| **Validation** | Zod middleware | Zod middleware + Mongoose schema validation |
-| **Project Deletion** | Array filtering | **Cascade Deletion** (deleting a project deletes associated tasks) |
-| **Dashboard** | Array calculation | Persistent MongoDB live queries |
-| **API Contract** | Standard REST API | 100% preserved response structure and endpoint paths |
+```text
+Project (Name + Description)
+   ↓
+POST /api/ai/suggest-tasks (Bearer Token)
+   ↓
+Verify User Ownership of Project
+   ↓
+Check ANTHROPIC_API_KEY
+ ├── Missing Key  → Returns 501 Not Implemented (AI_NOT_CONFIGURED)
+ └── Valid Key    → Calls Claude LLM Engine
+                        ↓
+                  Parses & Validates Structured JSON (3–7 tasks)
+                        ↓
+                  Returns Suggestions to Client
+                        ↓
+POST /api/ai/suggest-tasks/accept
+                        ↓
+Converts accepted tasks into real MongoDB Task documents (status: "todo")
+```
 
 ---
 
-## 🗑️ Cascade Deletion Policy
+## 🔒 Security & Authorization
 
-When a project is deleted via `DELETE /api/projects/:id`, all tasks referencing that project (`Task.projectId`) are automatically deleted from MongoDB. This prevents orphaned tasks and maintains database integrity.
-
----
-
-## 🌐 Live Production Deployment
-
-The backend API is deployed live on **Render**:
-
-- **Live API Base URL**: [https://devpulse-backend-jbzu.onrender.com](https://devpulse-backend-jbzu.onrender.com/)
-- **Health Check Endpoint**: [https://devpulse-backend-jbzu.onrender.com/api/health](https://devpulse-backend-jbzu.onrender.com/api/health)
+- `401 Unauthorized`: Missing, invalid, or expired JWT token on protected endpoints.
+- `403 Forbidden`: Authenticated user attempting to modify or delete a project or task belonging to another user.
+- `501 Not Implemented`: AI endpoint called when `ANTHROPIC_API_KEY` is unconfigured. Server remains online and functional.
+- `502 Bad Gateway`: AI engine returned non-JSON or malformed output.
 
 ---
 
 ## 🧪 Verification & Testing
 
-The Task 3 implementation was verified through automated tests:
+Task 4 features verified via automated integration suite (`scratch/test_task4.js`):
 
-1. **Health Check**: Verified `GET /api/health` returns HTTP 200 `online`.
-2. **User CRUD**: Verified user creation, reading, updating, and deletion.
-3. **Project CRUD**: Verified project creation, status updates, progress recalculations, and deletion.
-4. **Task CRUD**: Verified task creation, Kanban grouping, status updates, and `completedAt` timestamp automation.
-5. **MongoDB Persistence**: Verified created projects and tasks persist across server restarts.
-6. **Task → Project Relationship**: Verified invalid `projectId` rejection and `?populate=project` fetching.
-7. **Cascade Deletion**: Verified deleting a project removes all referencing tasks.
-8. **Dashboard Analytics**: Verified summary, velocity, activity logs, and insight metrics reflect database state.
-
----
-
-## 🔒 Security
-
-- Sensitive credentials and connection strings are stored exclusively in environment variables (`.env`).
-- `.env` is strictly excluded via `.gitignore`.
-- `.env.example` contains safe placeholder values only.
-- Real credentials and database URIs are never committed to GitHub.
+1. **Register**: `POST /api/auth/register` creates user and returns JWT without `passwordHash`.
+2. **Login**: `POST /api/auth/login` verifies password with bcrypt and returns valid JWT.
+3. **Current User**: `GET /api/auth/me` returns authenticated user profile.
+4. **Protected Write Operations**: `POST /api/projects` without token returns 401; with token succeeds.
+5. **Ownership Authorization**: User B attempting to modify User A's project returns 403 Forbidden.
+6. **AI Suggestions**: `POST /api/ai/suggest-tasks` returns valid JSON array of 3–7 task suggestions.
+7. **Accept AI Tasks**: `POST /api/ai/suggest-tasks/accept` persists accepted tasks to MongoDB with `status: "todo"`.
+8. **AI Fallback**: Unconfigured AI key returns HTTP 501 `AI_NOT_CONFIGURED` without server crash.
 
 ---
 
-## 🔗 Repository & Task 3 Deliverables
+## 🔗 Links
 
 - **GitHub Repository**: [https://github.com/Akashhh8826/devpulse-backend](https://github.com/Akashhh8826/devpulse-backend)
 - **Live Production API**: [https://devpulse-backend-jbzu.onrender.com](https://devpulse-backend-jbzu.onrender.com/)
+

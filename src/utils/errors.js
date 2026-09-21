@@ -33,9 +33,33 @@ class ConflictError extends AppError {
   }
 }
 
+class UnauthorizedError extends AppError {
+  constructor(message = 'Unauthorized access', code = 'UNAUTHORIZED') {
+    super(message, 401, code);
+  }
+}
+
+class ForbiddenError extends AppError {
+  constructor(message = 'Forbidden access', code = 'FORBIDDEN') {
+    super(message, 403, code);
+  }
+}
+
 class InternalServerError extends AppError {
   constructor(message = 'Internal server error', code = 'INTERNAL_SERVER_ERROR') {
     super(message, 500, code);
+  }
+}
+
+class NotImplementedError extends AppError {
+  constructor(message = 'Feature not implemented', code = 'NOT_IMPLEMENTED') {
+    super(message, 501, code);
+  }
+}
+
+class BadGatewayError extends AppError {
+  constructor(message = 'Bad gateway response from upstream service', code = 'BAD_GATEWAY') {
+    super(message, 502, code);
   }
 }
 
@@ -45,5 +69,9 @@ module.exports = {
   ValidationError,
   NotFoundError,
   ConflictError,
+  UnauthorizedError,
+  ForbiddenError,
   InternalServerError,
+  NotImplementedError,
+  BadGatewayError,
 };

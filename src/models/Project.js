@@ -35,6 +35,10 @@ const projectSchema = new mongoose.Schema(
       type: Date,
       required: [true, 'Due date is required'],
     },
+    ownerId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+    },
   },
   {
     timestamps: true,

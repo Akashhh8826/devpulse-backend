@@ -32,11 +32,16 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    passwordHash: {
+      type: String,
+      select: false,
+    },
   },
   {
     timestamps: true,
     toJSON: {
       transform: (doc, ret) => {
+        delete ret.passwordHash;
         delete ret._id;
         delete ret.__v;
         return ret;
@@ -44,6 +49,7 @@ const userSchema = new mongoose.Schema(
     },
     toObject: {
       transform: (doc, ret) => {
+        delete ret.passwordHash;
         delete ret._id;
         delete ret.__v;
         return ret;

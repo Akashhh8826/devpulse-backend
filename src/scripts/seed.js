@@ -24,11 +24,22 @@ async function seed() {
     await Activity.deleteMany({});
     console.log('🧹 Cleared existing database collections.');
 
-    // 1. Insert Users
-    const insertedUsers = await User.insertMany(initialUsers);
+    // 1. Insert Users with passwordHash
+    const bcrypt = require('bcryptjs');
+    const defaultPasswordHash = await bcrypt.hash('Password123!', 10);
+    const usersToInsert = initialUsers.map((u) => ({
+      ...u,
+      passwordHash: defaultPasswordHash,
+    }));
+    const insertedUsers = await User.insertMany(usersToInsert);
 
-    // 2. Insert Projects
-    const insertedProjects = await Project.insertMany(initialProjects);
+    // 2. Insert Projects with ownerId assigned to primary seed user
+    const primaryUserId = insertedUsers[0] ? insertedUsers[0]._id : null;
+    const projectsToInsert = initialProjects.map((p) => ({
+      ...p,
+      ownerId: primaryUserId,
+    }));
+    const insertedProjects = await Project.insertMany(projectsToInsert);
 
     // Map public string id (e.g. 'proj-1') to Mongoose _id (ObjectId)
     const projectMap = {};

@@ -1,6 +1,6 @@
 const store = require('../data/store');
 const { sendSuccess, sendCreated, sendNoContent } = require('../utils/response');
-const { NotFoundError } = require('../utils/errors');
+const { NotFoundError, ForbiddenError } = require('../utils/errors');
 
 async function getAllProjects(req, res, next) {
   try {
@@ -29,7 +29,11 @@ async function getProjectById(req, res, next) {
 
 async function createProject(req, res, next) {
   try {
-    const newProject = await store.createProject(req.body);
+    const ownerId = req.user ? req.user._id : undefined;
+    const newProject = await store.createProject({
+      ...req.body,
+      ownerId,
+    });
     return sendCreated(res, newProject);
   } catch (err) {
     next(err);
@@ -39,12 +43,17 @@ async function createProject(req, res, next) {
 async function updateProject(req, res, next) {
   try {
     const { id } = req.params;
-    const updatedProject = await store.updateProject(id, req.body);
+    const projectDoc = await store.findProjectDocById(id);
 
-    if (!updatedProject) {
+    if (!projectDoc) {
       throw new NotFoundError(`Project with ID '${id}' not found`);
     }
 
+    if (projectDoc.ownerId && req.user && projectDoc.ownerId.toString() !== req.user._id.toString()) {
+      throw new ForbiddenError('You do not have permission to modify this project');
+    }
+
+    const updatedProject = await store.updateProject(id, req.body);
     return sendSuccess(res, updatedProject);
   } catch (err) {
     next(err);
@@ -54,12 +63,17 @@ async function updateProject(req, res, next) {
 async function deleteProject(req, res, next) {
   try {
     const { id } = req.params;
-    const deleted = await store.deleteProject(id);
+    const projectDoc = await store.findProjectDocById(id);
 
-    if (!deleted) {
+    if (!projectDoc) {
       throw new NotFoundError(`Project with ID '${id}' not found`);
     }
 
+    if (projectDoc.ownerId && req.user && projectDoc.ownerId.toString() !== req.user._id.toString()) {
+      throw new ForbiddenError('You do not have permission to delete this project');
+    }
+
+    await store.deleteProject(id);
     return sendNoContent(res);
   } catch (err) {
     next(err);

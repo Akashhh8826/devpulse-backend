@@ -121,6 +121,10 @@ class DataStore {
     return project ? project.toJSON() : null;
   }
 
+  async findProjectDocById(id) {
+    return await Project.findOne({ id });
+  }
+
   async createProject(projectData) {
     const count = await Project.countDocuments();
     const id = projectData.id || `proj-${count + 1}-${Date.now()}`;
@@ -132,6 +136,7 @@ class DataStore {
       status: projectData.status || 'planning',
       progress: projectData.progress ?? 0,
       dueDate: projectData.dueDate,
+      ownerId: projectData.ownerId || null,
     });
 
     await this.addActivityLog(
