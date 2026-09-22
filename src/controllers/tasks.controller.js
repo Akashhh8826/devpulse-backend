@@ -1,6 +1,47 @@
+const mongoose = require('mongoose');
 const store = require('../data/store');
+const User = require('../models/User');
 const { sendSuccess, sendCreated, sendNoContent } = require('../utils/response');
 const { NotFoundError, BadRequestError, ForbiddenError } = require('../utils/errors');
+
+async function checkProjectOwnerPermission(projectDoc, user, actionMessage) {
+  if (!projectDoc || !projectDoc.ownerId || !user) {
+    return;
+  }
+
+  const ownerIdRaw = projectDoc.ownerId;
+  const ownerIdStr = ownerIdRaw.toString();
+  const userIdStr = user._id ? user._id.toString() : '';
+  const userPublicIdStr = user.id ? user.id.toString() : '';
+
+  if (ownerIdStr === userIdStr || ownerIdStr === userPublicIdStr) {
+    return;
+  }
+
+  try {
+    let ownerUser = null;
+    if (mongoose.isValidObjectId(ownerIdRaw)) {
+      ownerUser = await User.findById(ownerIdRaw);
+    }
+    if (!ownerUser) {
+      ownerUser = await User.findOne({ id: ownerIdStr });
+    }
+
+    if (ownerUser) {
+      if (
+        ownerUser._id.toString() === userIdStr ||
+        ownerUser.id === userPublicIdStr ||
+        (ownerUser.email && user.email && ownerUser.email.toLowerCase() === user.email.toLowerCase())
+      ) {
+        return;
+      }
+    }
+  } catch (err) {
+    // Ignore DB lookup error and proceed to throw ForbiddenError
+  }
+
+  throw new ForbiddenError(actionMessage);
+}
 
 async function getAllTasks(req, res, next) {
   try {
@@ -61,9 +102,11 @@ async function createTask(req, res, next) {
       throw new BadRequestError(`Cannot create task: Project with ID '${req.body.projectId}' does not exist`);
     }
 
-    if (projectDoc.ownerId && req.user && projectDoc.ownerId.toString() !== req.user._id.toString()) {
-      throw new ForbiddenError('You do not have permission to create tasks in this project');
-    }
+    await checkProjectOwnerPermission(
+      projectDoc,
+      req.user,
+      'You do not have permission to create tasks in this project'
+    );
 
     const newTask = await store.createTask(req.body);
     return sendCreated(res, newTask);
@@ -86,9 +129,11 @@ async function updateTask(req, res, next) {
       throw new BadRequestError(`Cannot update task: Project with ID '${targetProjectPublicId}' does not exist`);
     }
 
-    if (projectDoc.ownerId && req.user && projectDoc.ownerId.toString() !== req.user._id.toString()) {
-      throw new ForbiddenError('You do not have permission to modify tasks in this project');
-    }
+    await checkProjectOwnerPermission(
+      projectDoc,
+      req.user,
+      'You do not have permission to modify tasks in this project'
+    );
 
     const updatedTask = await store.updateTask(id, req.body);
     return sendSuccess(res, updatedTask);
@@ -106,9 +151,11 @@ async function deleteTask(req, res, next) {
     }
 
     const projectDoc = await store.findProjectDocById(existingTask.projectId);
-    if (projectDoc && projectDoc.ownerId && req.user && projectDoc.ownerId.toString() !== req.user._id.toString()) {
-      throw new ForbiddenError('You do not have permission to delete tasks from this project');
-    }
+    await checkProjectOwnerPermission(
+      projectDoc,
+      req.user,
+      'You do not have permission to delete tasks from this project'
+    );
 
     await store.deleteTask(id);
     return sendNoContent(res);

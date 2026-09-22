@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 
@@ -13,11 +14,29 @@ const errorHandler = require('./middleware/errorHandler');
 
 const app = express();
 
-// CORS configuration
+// CORS configuration with robust origin matching (handles trailing slashes, whitespace, and localhost)
 const corsOrigin = process.env.CORS_ORIGIN || '*';
+const allowedOrigins = corsOrigin === '*'
+  ? '*'
+  : corsOrigin.split(',').map((o) => o.trim().replace(/\/+$/, '')).filter(Boolean);
+
 app.use(
   cors({
-    origin: corsOrigin === '*' ? true : corsOrigin.split(','),
+    origin: (origin, callback) => {
+      // Allow requests with no origin (like mobile apps, curl, server health checks)
+      if (!origin || allowedOrigins === '*') {
+        return callback(null, true);
+      }
+      const normalizedOrigin = origin.trim().replace(/\/+$/, '');
+      if (allowedOrigins.includes(normalizedOrigin)) {
+        return callback(null, true);
+      }
+      // Allow localhost in non-production environments
+      if (process.env.NODE_ENV !== 'production' && /^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(normalizedOrigin)) {
+        return callback(null, true);
+      }
+      callback(new Error("CORS policy error: Origin " + origin + " is not allowed by CORS"));
+    },
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true,

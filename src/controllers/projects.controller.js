@@ -1,6 +1,47 @@
+const mongoose = require('mongoose');
 const store = require('../data/store');
+const User = require('../models/User');
 const { sendSuccess, sendCreated, sendNoContent } = require('../utils/response');
 const { NotFoundError, ForbiddenError } = require('../utils/errors');
+
+async function checkProjectOwnerPermission(projectDoc, user, actionMessage) {
+  if (!projectDoc || !projectDoc.ownerId || !user) {
+    return;
+  }
+
+  const ownerIdRaw = projectDoc.ownerId;
+  const ownerIdStr = ownerIdRaw.toString();
+  const userIdStr = user._id ? user._id.toString() : '';
+  const userPublicIdStr = user.id ? user.id.toString() : '';
+
+  if (ownerIdStr === userIdStr || ownerIdStr === userPublicIdStr) {
+    return;
+  }
+
+  try {
+    let ownerUser = null;
+    if (mongoose.isValidObjectId(ownerIdRaw)) {
+      ownerUser = await User.findById(ownerIdRaw);
+    }
+    if (!ownerUser) {
+      ownerUser = await User.findOne({ id: ownerIdStr });
+    }
+
+    if (ownerUser) {
+      if (
+        ownerUser._id.toString() === userIdStr ||
+        ownerUser.id === userPublicIdStr ||
+        (ownerUser.email && user.email && ownerUser.email.toLowerCase() === user.email.toLowerCase())
+      ) {
+        return;
+      }
+    }
+  } catch (err) {
+    // Ignore DB lookup error and proceed to throw ForbiddenError
+  }
+
+  throw new ForbiddenError(actionMessage);
+}
 
 async function getAllProjects(req, res, next) {
   try {
@@ -49,9 +90,11 @@ async function updateProject(req, res, next) {
       throw new NotFoundError(`Project with ID '${id}' not found`);
     }
 
-    if (projectDoc.ownerId && req.user && projectDoc.ownerId.toString() !== req.user._id.toString()) {
-      throw new ForbiddenError('You do not have permission to modify this project');
-    }
+    await checkProjectOwnerPermission(
+      projectDoc,
+      req.user,
+      'You do not have permission to modify this project'
+    );
 
     const updatedProject = await store.updateProject(id, req.body);
     return sendSuccess(res, updatedProject);
@@ -69,11 +112,17 @@ async function deleteProject(req, res, next) {
       throw new NotFoundError(`Project with ID '${id}' not found`);
     }
 
-    if (projectDoc.ownerId && req.user && projectDoc.ownerId.toString() !== req.user._id.toString()) {
-      throw new ForbiddenError('You do not have permission to delete this project');
+    await checkProjectOwnerPermission(
+      projectDoc,
+      req.user,
+      'You do not have permission to delete this project'
+    );
+
+    const deleted = await store.deleteProject(id);
+    if (!deleted) {
+      throw new NotFoundError(`Project with ID '${id}' could not be deleted`);
     }
 
-    await store.deleteProject(id);
     return sendNoContent(res);
   } catch (err) {
     next(err);

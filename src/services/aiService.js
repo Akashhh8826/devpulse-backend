@@ -1,20 +1,58 @@
-const Anthropic = require('@anthropic-ai/sdk');
+require('dotenv').config();
+const { GoogleGenAI } = require('@google/genai');
 const { NotImplementedError, BadGatewayError } = require('../utils/errors');
 
-async function suggestTasksForProject(projectName, projectDescription) {
-  const anthropicKey = process.env.ANTHROPIC_API_KEY;
-  const openaiKey = process.env.OPENAI_API_KEY;
+async function generateContentWithRetry(ai, model, prompt, maxAttempts = 3) {
+  let lastErr = null;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const response = await ai.models.generateContent({
+        model,
+        contents: prompt,
+        config: {
+          responseMimeType: 'application/json',
+        },
+      });
+      if (response && response.text) {
+        return response;
+      }
+    } catch (err) {
+      lastErr = err;
+      // If model not found or no longer available, break out early to try fallback model
+      if (
+        err.status === 404 ||
+        (err.message &&
+          (err.message.toLowerCase().includes('not_found') ||
+            err.message.toLowerCase().includes('no longer available') ||
+            err.message.toLowerCase().includes('not found')))
+      ) {
+        throw err;
+      }
+      // Wait before retrying on 503 / transient errors
+      if (attempt < maxAttempts) {
+        await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));
+      }
+    }
+  }
+  throw lastErr;
+}
 
-  if (!anthropicKey && !openaiKey) {
+async function suggestTasksForProject(projectName, projectDescription) {
+  let geminiApiKey = process.env.GEMINI_API_KEY;
+
+  if (geminiApiKey) {
+    geminiApiKey = geminiApiKey.trim().replace(/^["']|["']$/g, '');
+  }
+
+  if (!geminiApiKey || geminiApiKey === 'your-gemini-api-key') {
     throw new NotImplementedError('AI feature not configured', 'AI_NOT_CONFIGURED');
   }
 
   let rawContent = '';
 
-  if (anthropicKey) {
-    try {
-      const client = new Anthropic({ apiKey: anthropicKey });
-      const prompt = `You are a software engineering project manager. Analyze the following project and generate 3 to 7 high-impact, actionable development tasks.
+  try {
+    const ai = new GoogleGenAI({ apiKey: geminiApiKey });
+    const prompt = `You are a software engineering project manager. Analyze the following project and generate 3 to 7 high-impact, actionable development tasks.
 
 Project Name: ${projectName}
 Project Description: ${projectDescription || 'N/A'}
@@ -31,78 +69,38 @@ Your output MUST be ONLY valid JSON matching this exact structure without any ma
 Requirements for priority field: must be strictly one of "low", "medium", or "high".
 Generate between 3 and 7 tasks.`;
 
-      const preferredModel = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6';
-      let response;
-      try {
-        response = await client.messages.create({
-          model: preferredModel,
-          max_tokens: 1000,
-          messages: [{ role: 'user', content: prompt }],
-        });
-      } catch (apiErr) {
-        // If preferredModel (claude-sonnet-4-6) is not recognized by endpoint, fallback to standard sonnet model
-        if (apiErr.status === 404 || (apiErr.message && (apiErr.message.includes('model') || apiErr.message.includes('not_found')))) {
-          response = await client.messages.create({
-            model: 'claude-3-5-sonnet-20241022',
-            max_tokens: 1000,
-            messages: [{ role: 'user', content: prompt }],
-          });
-        } else {
-          throw apiErr;
+    const preferredModel = process.env.GEMINI_MODEL || 'gemini-3.6-flash';
+    let response;
+    try {
+      response = await generateContentWithRetry(ai, preferredModel, prompt);
+    } catch (apiErr) {
+      // Fallback model sequence if primary model returns 404
+      const fallbackModels = ['gemini-3.5-flash', 'gemini-flash-latest'];
+      for (const fallbackModel of fallbackModels) {
+        try {
+          response = await generateContentWithRetry(ai, fallbackModel, prompt);
+          if (response) break;
+        } catch (fErr) {
+          // continue fallback loop
         }
       }
-
-      if (response && response.content && response.content.length > 0) {
-        rawContent = response.content[0].text;
+      if (!response) {
+        throw apiErr;
       }
-    } catch (err) {
-      if (err instanceof NotImplementedError) throw err;
-      console.error('[AI SERVICE ERROR]', err);
-      throw new BadGatewayError('Failed to communicate with AI provider', 'AI_PROVIDER_ERROR');
     }
-  } else if (openaiKey) {
-    try {
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${openaiKey}`,
-        },
-        body: JSON.stringify({
-          model: 'gpt-4o-mini',
-          messages: [
-            {
-              role: 'user',
-              content: `Analyze the following project and generate 3 to 7 actionable development tasks as valid JSON only:
-Project Name: ${projectName}
-Project Description: ${projectDescription || 'N/A'}
 
-JSON format:
-[
-  {
-    "title": "Task title",
-    "priority": "low" | "medium" | "high",
-    "rationale": "Reason"
-  }
-]`,
-            },
-          ],
-        }),
-      });
-      const data = await response.json();
-      if (data.choices && data.choices[0]) {
-        rawContent = data.choices[0].message.content;
-      }
-    } catch (err) {
-      console.error('[AI SERVICE ERROR]', err);
-      throw new BadGatewayError('Failed to communicate with AI provider', 'AI_PROVIDER_ERROR');
+    if (response && response.text) {
+      rawContent = response.text;
     }
+  } catch (err) {
+    if (err instanceof NotImplementedError) throw err;
+    console.error('[AI SERVICE ERROR]', err);
+    throw new BadGatewayError('Failed to communicate with AI provider', 'AI_PROVIDER_ERROR');
   }
 
   // Parse and validate rawContent
   let tasks = null;
   try {
-    // Strip code block markers if LLM includes them
     let cleanText = rawContent.trim();
     if (cleanText.startsWith('```json')) {
       cleanText = cleanText.replace(/^```json/, '').replace(/```$/, '').trim();

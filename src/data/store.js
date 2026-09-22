@@ -1,7 +1,17 @@
+const mongoose = require('mongoose');
 const User = require('../models/User');
 const Project = require('../models/Project');
 const Task = require('../models/Task');
 const Activity = require('../models/Activity');
+
+function buildIdFilter(idKey, idValue) {
+  if (!idValue) return { [idKey]: null };
+  const filter = [{ [idKey]: idValue }];
+  if (mongoose.isValidObjectId(idValue)) {
+    filter.push({ _id: idValue });
+  }
+  return { $or: filter };
+}
 
 class DataStore {
   // --- LOG ACTIVITY ---
@@ -23,10 +33,12 @@ class DataStore {
   async recalculateProjectProgress(projectPublicId) {
     if (!projectPublicId) return;
 
-    const project = await Project.findOne({ id: projectPublicId });
+    const project = await Project.findOne(buildIdFilter('id', projectPublicId));
     if (!project) return;
 
-    const projectTasks = await Task.find({ projectId: project._id });
+    const projectTasks = await Task.find({
+      $or: [{ projectId: project._id }, { projectPublicId: project.id }],
+    });
     if (projectTasks.length === 0) return;
 
     const completedCount = projectTasks.filter((t) => t.status === 'done').length;
@@ -43,7 +55,7 @@ class DataStore {
   }
 
   async findUserById(id) {
-    const user = await User.findOne({ id });
+    const user = await User.findOne(buildIdFilter('id', id));
     return user ? user.toJSON() : null;
   }
 
@@ -74,7 +86,7 @@ class DataStore {
   }
 
   async updateUser(id, updates) {
-    const user = await User.findOneAndUpdate({ id }, updates, {
+    const user = await User.findOneAndUpdate(buildIdFilter('id', id), updates, {
       new: true,
       runValidators: true,
     });
@@ -82,7 +94,7 @@ class DataStore {
   }
 
   async deleteUser(id) {
-    const user = await User.findOneAndDelete({ id });
+    const user = await User.findOneAndDelete(buildIdFilter('id', id));
     return !!user;
   }
 
@@ -117,12 +129,13 @@ class DataStore {
   }
 
   async findProjectById(id) {
-    const project = await Project.findOne({ id });
+    const project = await Project.findOne(buildIdFilter('id', id));
     return project ? project.toJSON() : null;
   }
 
   async findProjectDocById(id) {
-    return await Project.findOne({ id });
+    if (!id) return null;
+    return await Project.findOne(buildIdFilter('id', id));
   }
 
   async createProject(projectData) {
@@ -150,7 +163,7 @@ class DataStore {
   }
 
   async updateProject(id, updates) {
-    const project = await Project.findOne({ id });
+    const project = await Project.findOne(buildIdFilter('id', id));
     if (!project) return null;
 
     const oldStatus = project.status;
@@ -170,12 +183,12 @@ class DataStore {
   }
 
   async deleteProject(id) {
-    const project = await Project.findOne({ id });
+    const project = await Project.findOne(buildIdFilter('id', id));
     if (!project) return false;
 
     // Cascade delete associated tasks referencing project's _id or public id
     await Task.deleteMany({
-      $or: [{ projectId: project._id }, { projectPublicId: id }],
+      $or: [{ projectId: project._id }, { projectPublicId: project.id }],
     });
 
     await Project.deleteOne({ _id: project._id });
@@ -196,11 +209,15 @@ class DataStore {
     const filter = {};
 
     if (projectId) {
-      const project = await Project.findOne({ id: projectId });
+      const project = await Project.findOne(buildIdFilter('id', projectId));
       if (project) {
-        filter.projectId = project._id;
+        filter.$or = [{ projectId: project._id }, { projectPublicId: project.id }];
       } else {
-        filter.projectPublicId = projectId;
+        const altFilter = [{ projectPublicId: projectId }];
+        if (mongoose.isValidObjectId(projectId)) {
+          altFilter.push({ projectId: projectId });
+        }
+        filter.$or = altFilter;
       }
     }
     if (status) {
@@ -226,7 +243,7 @@ class DataStore {
   }
 
   async findTaskById(id, { populate } = {}) {
-    let query = Task.findOne({ id });
+    let query = Task.findOne(buildIdFilter('id', id));
     if (populate === 'project' || populate === true || populate === 'true') {
       query = query.populate('projectId');
     }
@@ -236,7 +253,7 @@ class DataStore {
   }
 
   async createTask(taskData) {
-    const project = await Project.findOne({ id: taskData.projectId });
+    const project = await Project.findOne(buildIdFilter('id', taskData.projectId));
     if (!project) {
       return null;
     }
@@ -271,14 +288,14 @@ class DataStore {
   }
 
   async updateTask(id, updates) {
-    const task = await Task.findOne({ id });
+    const task = await Task.findOne(buildIdFilter('id', id));
     if (!task) return null;
 
     const oldStatus = task.status;
     let completedAt = task.completedAt;
 
     if (updates.projectId) {
-      const project = await Project.findOne({ id: updates.projectId });
+      const project = await Project.findOne(buildIdFilter('id', updates.projectId));
       if (project) {
         task.projectId = project._id;
         task.projectPublicId = project.id;
@@ -312,9 +329,10 @@ class DataStore {
   }
 
   async deleteTask(id) {
-    const task = await Task.findOneAndDelete({ id });
+    const task = await Task.findOne(buildIdFilter('id', id));
     if (!task) return false;
 
+    await Task.deleteOne({ _id: task._id });
     await this.recalculateProjectProgress(task.projectPublicId);
     return true;
   }
