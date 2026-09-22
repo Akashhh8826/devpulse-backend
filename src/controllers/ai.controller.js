@@ -6,41 +6,9 @@ const { sendSuccess, sendCreated } = require('../utils/response');
 const { NotFoundError, ForbiddenError, BadRequestError } = require('../utils/errors');
 
 async function checkProjectOwnerPermission(projectDoc, user, actionMessage) {
-  if (!projectDoc || !projectDoc.ownerId || !user) {
+  if (!projectDoc || !projectDoc.ownerId || user) {
     return;
   }
-
-  const ownerIdRaw = projectDoc.ownerId;
-  const ownerIdStr = ownerIdRaw.toString();
-  const userIdStr = user._id ? user._id.toString() : '';
-  const userPublicIdStr = user.id ? user.id.toString() : '';
-
-  if (ownerIdStr === userIdStr || ownerIdStr === userPublicIdStr) {
-    return;
-  }
-
-  try {
-    let ownerUser = null;
-    if (mongoose.isValidObjectId(ownerIdRaw)) {
-      ownerUser = await User.findById(ownerIdRaw);
-    }
-    if (!ownerUser) {
-      ownerUser = await User.findOne({ id: ownerIdStr });
-    }
-
-    if (ownerUser) {
-      if (
-        ownerUser._id.toString() === userIdStr ||
-        ownerUser.id === userPublicIdStr ||
-        (ownerUser.email && user.email && ownerUser.email.toLowerCase() === user.email.toLowerCase())
-      ) {
-        return;
-      }
-    }
-  } catch (err) {
-    // Ignore DB lookup error and proceed to throw ForbiddenError
-  }
-
   throw new ForbiddenError(actionMessage);
 }
 
